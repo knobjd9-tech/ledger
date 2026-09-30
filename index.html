@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1d6b52">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<title>Daily Ledger</title>
+<style>
+/* Layout: a single working column — today's checklist first, food numbers beside it on wide screens, trends and the 8-week grid below. */
+:root{
+  --bg:#f3f5f2; --surface:#ffffff; --ink:#18221d; --muted:#5d6b63; --line:#dde3de;
+  --accent:#1d6b52; --accent-soft:#d6ebe2; --empty:#e7ece8;
+  --good:#1d7a4a; --warn:#b4540a; --bad:#b3261e;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111714; --surface:#19211d; --ink:#e6ece8; --muted:#94a39a; --line:#2a3530;
+  --accent:#5cc49b; --accent-soft:#1f3a2f; --empty:#222c27;
+  --good:#5cc48a; --warn:#f0a15a; --bad:#f2837a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111714; --surface:#19211d; --ink:#e6ece8; --muted:#94a39a; --line:#2a3530;
+  --accent:#5cc49b; --accent-soft:#1f3a2f; --empty:#222c27;
+  --good:#5cc48a; --warn:#f0a15a; --bad:#f2837a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:20px 48px;display:grid;gap:20px}
+h1,h2{font-family:var(--display);text-wrap:balance;margin:0}
+h1{font-size:clamp(26px,5vw,36px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:18px;font-weight:600}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px}
+.datenav{display:flex;align-items:center;gap:6px}
+button{font:inherit;color:inherit;cursor:pointer}
+.nav{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 12px}
+.nav:disabled{opacity:.4;cursor:default}
+.nav:focus-visible,.habit:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#dateLabel{min-width:150px;text-align:center;font-weight:600}
+.status{font-size:13px;color:var(--muted)}
+.top{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px}
+@media (max-width:760px){.top{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px;min-width:0}
+.phead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.habits{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.habit{display:flex;align-items:center;gap:10px;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:48px}
+.habit .box{flex:none;width:20px;height:20px;border-radius:5px;border:2px solid var(--muted);display:grid;place-items:center}
+.habit[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.habit[aria-pressed="true"] .box{background:var(--accent);border-color:var(--accent)}
+.habit[aria-pressed="true"] .box::after{content:"";width:9px;height:5px;border:2px solid var(--surface);border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+.habit .name{font-weight:500;font-size:14px;line-height:1.2}
+.habit .auto{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.score{font-family:var(--display);font-size:28px;font-weight:800}
+.meter{display:grid;gap:6px}
+.meter .row{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.bar{height:10px;border-radius:5px;background:var(--empty);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:5px;background:var(--accent)}
+.bar i.over{background:var(--bad)}
+.pill{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;border:1px solid currentColor}
+.pill.ok{color:var(--good)} .pill.no{color:var(--bad)} .pill.na{color:var(--muted)}
+.inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.inputs label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+input[type=number]{font:inherit;font-family:var(--mono);width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+.src{font-size:12px;color:var(--muted)}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+svg{display:block;width:100%;height:auto;overflow:visible}
+svg text{fill:var(--muted);font-family:var(--mono);font-size:10px}
+.gridwrap{overflow-x:auto}
+table.grid{border-collapse:separate;border-spacing:3px;font-size:13px}
+table.grid th[scope=row]{position:sticky;left:0;background:var(--surface);z-index:1}
+table.grid th{text-align:left;font-weight:500;padding-right:10px;white-space:nowrap}
+table.grid td.c{width:14px;height:14px;border-radius:3px;background:var(--empty);padding:0}
+table.grid td.c.y{background:var(--accent)}
+table.grid td.c.sel{outline:2px solid var(--ink);outline-offset:0}
+table.grid td.st{padding-left:10px;white-space:nowrap;color:var(--muted);font-family:var(--mono);font-size:12px}
+.tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:5px 8px;border-radius:6px;font-family:var(--mono)}
+@media (prefers-reduced-motion:no-preference){.bar i{transition:width .3s}}
+
+.linkbtn{background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;font-size:13px}
+.setup{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;padding-inline:16px;z-index:5}
+.setupcard{width:min(440px,100%)}
+.setupcard input{font:inherit;width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px}
+.setupcard p{margin:0}
+.primary{background:var(--accent);color:var(--surface);border:0;border-radius:8px;padding:11px;font-weight:600}
+.err{color:var(--bad);font-size:13px;min-height:1em}
+</style>
+<style>
+html{-webkit-text-size-adjust:100%}
+body{margin:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+img{max-width:100%}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="lbl">Habits + Lose It</div>
+      <h1>Daily Ledger</h1>
+    </div>
+    <div style="display:grid;gap:4px;justify-items:end">
+      <div class="datenav">
+        <button class="nav" id="prev" aria-label="Previous day">&larr;</button>
+        <div id="dateLabel" class="num">&nbsp;</div>
+        <button class="nav" id="next" aria-label="Next day">&rarr;</button>
+        <button class="nav" id="today">Today</button>
+      </div>
+      <div class="status"><span id="status">Loading…</span> · <button class="linkbtn" id="reconnect">Connection</button></div>
+    </div>
+  </header>
+
+  <section class="top">
+    <div class="panel">
+      <div class="phead"><h2>Checklist</h2><div><span class="score num" id="score">0/12</span></div></div>
+      <div class="habits" id="habits"></div>
+    </div>
+    <div class="panel">
+      <div class="phead"><h2>Food</h2><span class="src" id="foodSrc">No Lose It data yet</span></div>
+      <div class="meter">
+        <div class="row"><span class="lbl">Calories</span><span class="num" id="calTxt">–</span></div>
+        <div class="bar"><i id="calBar" style="width:0"></i></div>
+      </div>
+      <div class="meter">
+        <div class="row"><span class="lbl">Protein</span><span class="num" id="proTxt">–</span></div>
+        <div class="bar"><i id="proBar" style="width:0"></i></div>
+      </div>
+      <div class="inputs">
+        <label for="calIn">Calories eaten<input id="calIn" type="number" inputmode="numeric" min="0" placeholder="auto from email"></label>
+        <label for="proIn">Protein (g)<input id="proIn" type="number" inputmode="numeric" min="0" placeholder="auto from email"></label>
+        <label for="budIn">Calorie budget<input id="budIn" type="number" inputmode="numeric" min="0"></label>
+        <label for="goalIn">Protein goal (g)<input id="goalIn" type="number" inputmode="numeric" min="0"></label>
+      </div>
+      <div class="src">Numbers fill in each morning from Lose It's daily email. Type over them any time.</div>
+    </div>
+  </section>
+
+  <section class="charts">
+    <div class="panel">
+      <div class="phead"><h2>Calories, last 30 days</h2><span class="src">line = budget</span></div>
+      <div id="calChart"></div>
+    </div>
+    <div class="panel">
+      <div class="phead"><h2>Protein, last 30 days</h2><span class="src">line = goal</span></div>
+      <div id="proChart"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><h2>Last 8 weeks</h2><span class="src">streak · 30-day rate</span></div>
+    <div class="gridwrap"><table class="grid" id="grid"></table></div>
+  </section>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+
+<div class="setup" id="setup" hidden>
+  <form class="panel setupcard" id="setupForm">
+    <h2>Connect your data</h2>
+    <p class="src">Paste the Web app link from your Google Apps Script deployment and your passcode. You only do this once on each device.</p>
+    <label for="setupUrl" class="lbl">Web app link</label>
+    <input id="setupUrl" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
+    <label for="setupKey" class="lbl">Passcode</label>
+    <input id="setupKey" type="text" autocomplete="off" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX">
+    <div class="err" id="setupErr"></div>
+    <button type="submit" class="primary">Connect</button>
+  </form>
+</div>
+<script>
+
+const HABITS=[
+ ["exercise","Exercise"],["pullups","Pull-ups"],["meditate","Meditate"],["read","Read"],
+ ["protein","Protein Goal","auto"],["undercal","Under Calorie Goal","auto"],["cookhome","Cook / Eat 1 Meal at Home"],
+ ["floss","Floss"],["brushpm","Brush Teeth PM"],["bed10","In Bed by 10p"],["nosmoke","No Smoke"],["nodrink","No Drink"]
+];
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,"0");
+const key=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const fromKey=k=>{const[a,b,c]=k.split("-").map(Number);return new Date(a,b-1,c)};
+const addDays=(k,n)=>{const d=fromKey(k);d.setDate(d.getDate()+n);return key(d)};
+let TODAY=key(new Date());
+let cur=TODAY, days={}, settings={calorieBudget:null,proteinGoal:null}, readOnly=false;
+
+function budgetFor(d){return (d&&d.calorieBudget)||settings.calorieBudget}
+function goalFor(d){return (d&&d.proteinGoal)||settings.proteinGoal}
+function isDone(k,h){
+  const d=days[k]; if(!d) return false;
+  const v=d.habits&&d.habits[h];
+  if(v===true||v===false) return v;
+  if(h==="undercal"&&d.calories!=null&&budgetFor(d)) return d.calories<=budgetFor(d);
+  if(h==="protein"&&d.protein!=null&&goalFor(d)) return d.protein>=goalFor(d);
+  return false;
+}
+function streak(h){
+  let k=TODAY,n=0;
+  if(!isDone(k,h)) k=addDays(k,-1);
+  while(isDone(k,h)){n++;k=addDays(k,-1)}
+  return n;
+}
+function rate(h){let n=0;for(let i=0;i<30;i++) if(isDone(addDays(TODAY,-i),h)) n++;return Math.round(n/30*100)}
+
+function renderDay(){
+  const d=days[cur]||{};
+  const dt=fromKey(cur);
+  $("dateLabel").textContent=dt.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+  $("next").disabled=cur>=TODAY;
+  const hb=$("habits"); hb.textContent="";
+  let done=0;
+  for(const [id,name,auto] of HABITS){
+    const on=isDone(cur,id); if(on) done++;
+    const b=document.createElement("button");
+    b.className="habit"; b.id="h-"+id; b.setAttribute("aria-pressed",on);
+    b.disabled=readOnly;
+    b.innerHTML='<span class="box"></span><span class="name"></span>';
+    b.querySelector(".name").textContent=name;
+    if(auto){const s=document.createElement("span");s.className="auto";s.textContent="auto from Lose It";b.querySelector(".name").appendChild(s)}
+    b.onclick=()=>toggle(id);
+    hb.appendChild(b);
+  }
+  $("score").textContent=done+"/"+HABITS.length;
+  const bud=budgetFor(d), goal=goalFor(d);
+  const cal=d.calories, pro=d.protein;
+  $("calTxt").textContent=(cal!=null?cal.toLocaleString():"–")+" / "+(bud?bud.toLocaleString():"–");
+  $("proTxt").textContent=(pro!=null?pro+"g":"–")+" / "+(goal?goal+"g":"–");
+  const cb=$("calBar"); cb.style.width=(cal!=null&&bud?Math.min(100,cal/bud*100):0)+"%"; cb.classList.toggle("over",cal!=null&&bud&&cal>bud);
+  $("proBar").style.width=(pro!=null&&goal?Math.min(100,pro/goal*100):0)+"%";
+  for(const [el,v] of [["calIn",cal],["proIn",pro],["budIn",bud],["goalIn",goal]]) if(document.activeElement!==$(el)) $(el).value=v??"";
+  $("foodSrc").textContent=d.source==="loseit-email"?"From Lose It email":(cal!=null||pro!=null?"Entered by hand":"No Lose It data yet");
+}
+
+function barChart(el,field,refFn,unit){
+  const W=520,H=170,L=36,B=18,T=8,n=30;
+  const ks=[];for(let i=n-1;i>=0;i--) ks.push(addDays(TODAY,-i));
+  const vals=ks.map(k=>days[k]&&days[k][field]!=null?days[k][field]:null);
+  const refs=ks.map(k=>refFn(days[k]));
+  const max=Math.max(1,...vals.filter(v=>v!=null),...refs.filter(Boolean))*1.1;
+  const step=Math.pow(10,Math.floor(Math.log10(max)));const tick=max/step>5?step*2:step;
+  const y=v=>T+(H-T-B)*(1-v/max), bw=(W-L)/n;
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${field} for the last 30 days">`;
+  for(let t=0;t<=max;t+=tick) s+=`<line x1="${L}" x2="${W}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text x="${L-6}" y="${y(t)+3}" text-anchor="end">${t>=1000?(t/1000)+"k":t}</text>`;
+  vals.forEach((v,i)=>{
+    const x=L+i*bw+1,r=refs[i];
+    const over=field==="calories"?(r&&v>r):(r&&v<r);
+    if(v!=null) s+=`<path d="M${x},${y(0)} V${y(v)+3} q0,-3 3,-3 h${bw-8} q3,0 3,3 V${y(0)}Z" fill="${over?"var(--warn)":"var(--accent)"}"/>`;
+    s+=`<rect x="${L+i*bw}" y="${T}" width="${bw}" height="${H-T-B}" fill="transparent" data-tip="${fromKey(ks[i]).toLocaleDateString(undefined,{month:"short",day:"numeric"})}: ${v!=null?v.toLocaleString()+unit:"no data"}${r?" / "+r.toLocaleString()+unit:""}"/>`;
+  });
+  const pts=refs.map((r,i)=>r?`${L+i*bw},${y(r)} ${L+(i+1)*bw},${y(r)}`:null);
+  let path="";pts.forEach(p=>{if(p){path+=(path?" L":"M")+p.replace(" "," L")}});
+  if(path) s+=`<path d="${path}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-dasharray="4 3"/>`;
+  [0,14,29].forEach(i=>s+=`<text x="${L+i*bw+bw/2}" y="${H-4}" text-anchor="middle">${fromKey(ks[i]).toLocaleDateString(undefined,{month:"numeric",day:"numeric"})}</text>`);
+  s+="</svg>";
+  $(el).innerHTML=s;
+}
+
+function renderGrid(){
+  const n=56, ks=[];for(let i=n-1;i>=0;i--) ks.push(addDays(TODAY,-i));
+  let h="<thead><tr><th></th>";
+  ks.forEach((k,i)=>{h+=`<th style="font-size:10px;color:var(--muted);font-weight:400;padding:0">${i%7===0?fromKey(k).getDate():""}</th>`});
+  h+="<th></th></tr></thead><tbody>";
+  for(const [id,name] of HABITS){
+    h+=`<tr><th scope="row">${name}</th>`;
+    ks.forEach(k=>{h+=`<td class="c${isDone(k,id)?" y":""}${k===cur?" sel":""}" data-k="${k}" data-tip="${name} · ${fromKey(k).toLocaleDateString(undefined,{month:"short",day:"numeric"})}: ${isDone(k,id)?"done":"not done"}"></td>`});
+    h+=`<td class="st">${streak(id)}d · ${rate(id)}%</td></tr>`;
+  }
+  $("grid").innerHTML=h+"</tbody>";
+  const gw=document.querySelector(".gridwrap"); gw.scrollLeft=gw.scrollWidth;
+}
+
+function render(){renderDay();barChart("calChart","calories",budgetFor," cal");barChart("proChart","protein",goalFor,"g");renderGrid()}
+
+async function saveDay(patch){
+  days[cur]=Object.assign({},days[cur]||{},patch,{habits:Object.assign({},(days[cur]||{}).habits||{},patch.habits||{})});
+  render();
+  cache();
+  const hb={};Object.entries(patch.habits||{}).forEach(([k,v])=>hb[k]=v);
+  const p=Object.assign({},patch,{habits:hb});
+  enqueue({action:"saveDay",date:cur,patch:p});
+}
+function toggle(h){saveDay({habits:{[h]:!isDone(cur,h)}})}
+
+let tmr;
+function numInput(el,field,target){
+  $(el).addEventListener("input",()=>{clearTimeout(tmr);tmr=setTimeout(async()=>{
+    const v=$(el).value===""?null:Number($(el).value);
+    if(target==="day"){
+      const patch={[field]:v};
+      if(v!=null&&(days[cur]||{}).source==="loseit-email") patch.source="edited";
+      // a typed number clears any manual override so the auto habit recomputes
+      const hk=field==="calories"?"undercal":field==="protein"?"protein":null;
+      const hs=Object.assign({},(days[cur]||{}).habits||{}); if(hk) delete hs[hk];
+      days[cur]=Object.assign({},days[cur]||{},{habits:hs}); if(hk) patch.habits={[hk]:null}; saveDay(patch);
+    }else{
+      settings[field]=v; render();
+      cache(); enqueue({action:"saveSettings",settings});
+    }
+  },600)});
+}
+numInput("calIn","calories","day");numInput("proIn","protein","day");
+numInput("budIn","calorieBudget","settings");numInput("goalIn","proteinGoal","settings");
+
+$("prev").onclick=()=>{cur=addDays(cur,-1);render()};
+$("next").onclick=()=>{if(cur<TODAY){cur=addDays(cur,1);render()}};
+$("today").onclick=()=>{cur=TODAY;render()};
+$("grid").addEventListener("click",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k){cur=k;render();window.scrollTo({top:0,behavior:"smooth"})}});
+
+const tip=$("tip");
+document.addEventListener("pointermove",e=>{const t=e.target.dataset&&e.target.dataset.tip;
+  if(t){tip.textContent=t;tip.hidden=false;const x=Math.min(e.clientX+12,innerWidth-tip.offsetWidth-8);tip.style.left=x+"px";tip.style.top=(e.clientY+14)+"px"}else tip.hidden=true});
+
+
+/* ---------- storage: Google Sheet via Apps Script ---------- */
+const LS="ledger.v1";
+function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+let conn=lsGet(LS+".conn");
+function cache(){lsSet(LS+".data",{days,settings})}
+const queue=[];let busy=false;
+function enqueue(req){queue.push(req);$("status").textContent="Saving…";flush()}
+async function flush(){
+  if(busy||!queue.length) return; busy=true;
+  const req=queue[0];
+  try{
+    const r=await fetch(conn.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({key:conn.key},req))});
+    const j=await r.json();
+    if(j.error==="bad_passcode"){$("status").textContent="Passcode rejected. Reconnect below.";showSetup();busy=false;return}
+    queue.shift(); $("status").textContent=queue.length?"Saving…":"Saved";
+  }catch(e){ $("status").textContent="Offline. Will retry…"; busy=false; setTimeout(flush,5000); return }
+  busy=false; flush();
+}
+async function load(){
+  if(!conn){showSetup();return}
+  $("status").textContent="Syncing…";
+  try{
+    const r=await fetch(conn.url+(conn.url.includes("?")?"&":"?")+"key="+encodeURIComponent(conn.key));
+    const j=await r.json();
+    if(j.error){$("status").textContent="Passcode rejected. Reconnect below.";showSetup();return}
+    if(queue.length) return; // don't clobber unsaved taps
+    days=j.days||{}; settings=Object.assign({calorieBudget:null,proteinGoal:null},j.settings||{});
+    cache(); render(); $("status").textContent="Synced "+new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+  }catch(e){$("status").textContent="Offline. Showing saved copy."}
+}
+function showSetup(){$("setup").hidden=false;$("setupUrl").value=conn?conn.url:"";}
+$("setupForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const url=$("setupUrl").value.trim(), key=$("setupKey").value.trim().toUpperCase();
+  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)){$("setupErr").textContent="That link should start with https://script.google.com/";return}
+  if(!key){$("setupErr").textContent="Enter the passcode.";return}
+  conn={url,key};lsSet(LS+".conn",conn);$("setup").hidden=true;$("setupErr").textContent="";load();
+});
+$("reconnect").onclick=showSetup;
+const saved=lsGet(LS+".data"); if(saved){days=saved.days||{};settings=saved.settings||settings}
+render(); load();
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){const t=key(new Date());if(t!==TODAY){if(cur===TODAY)cur=t;TODAY=t;render()}load()}});
+</script>
+</body>
+</html>
