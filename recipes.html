@@ -161,6 +161,20 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .video.ig{aspect-ratio:auto;height:min(560px,60dvh);max-width:420px;margin-inline:auto;background:#fff}
 .tw{position:relative;display:block;width:96px;height:96px}
 .play{position:absolute;right:6px;bottom:6px;width:24px;height:24px;border-radius:99px;background:rgba(0,0,0,.7);color:#fff;font-size:10px;display:grid;place-items:center;padding-left:2px}
+.upl{gap:8px}
+.upl .btn{font-weight:500}
+.busy{position:fixed;inset:0;z-index:60;background:rgba(5,5,7,.8);display:grid;place-items:center;padding:16px}
+.busycard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;display:grid;gap:8px;justify-items:center;text-align:center;max-width:320px}
+.est{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);margin-left:4px}
+.notice .btn{margin-top:8px}
+.links{display:grid;gap:6px}
+.linkrow{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--raised);border:1px solid var(--line);border-radius:10px;color:var(--ink);text-decoration:none}
+.linkrow:hover{border-color:var(--accent)}
+.lic{width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:13px;flex:none}
+.lt{display:grid;flex:1;min-width:0}
+.lt b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lt span{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.linkedit{background:none;border:0;color:var(--accent);font-weight:600;font-size:13px}
 </style>
 </head>
 <body>
@@ -172,6 +186,8 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
       <div class="menu" id="viewMenu" hidden>
         <button type="button" data-v="list"><b>Recipes</b><span>Find, cook and add recipes</span></button>
         <button type="button" data-v="grocery"><b>Grocery list</b><span id="menuGroc">Ingredients for the store</span></button>
+        <hr>
+        <button type="button" id="aiMenu"><b>AI video reading</b><span id="aiMenuSub">Set up your free Gemini key</span></button>
         <hr>
         <a href="./"><b>Daily Ledger ↗</b><span>Back to your habits</span></a>
       </div>
@@ -186,6 +202,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
         <input id="importUrl" class="field" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste a recipe link">
         <button type="submit" class="btn primary" id="importBtn">Import</button>
       </div>
+      <div class="row upl"><span class="src">or</span><label class="btn" for="vidFile" id="vidLabel">Upload a cooking video</label><input id="vidFile" type="file" accept="video/*" hidden><span class="src" id="aiHint"></span></div>
       <div class="err" id="importErr" hidden></div>
     </form>
     <input id="search" class="field" type="search" placeholder="Search recipes or ingredients" autocomplete="off" aria-label="Search recipes">
@@ -256,6 +273,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
     </div>
     <label for="eIng">Ingredients (one per line)<textarea id="eIng" class="field"></textarea></label>
     <label for="eSteps">Steps (one per line)<textarea id="eSteps" class="field" style="min-height:180px"></textarea></label>
+    <label for="eLinks">Extra links (one per line; add a name first if you like)<textarea id="eLinks" class="field" style="min-height:70px" placeholder="Sauce recipe https://…&#10;https://…"></textarea></label>
     <label for="eNotes">Notes<textarea id="eNotes" class="field" style="min-height:70px" placeholder="Swaps, tips, what to change next time"></textarea></label>
     <label for="eImg">Photo link<input id="eImg" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off"></label>
     <label for="eVideo">Video link: YouTube, TikTok or Instagram (optional)<input id="eVideo" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…"></label>
@@ -263,6 +281,33 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
     <div id="eDelete"></div>
   </form>
 </section>
+
+<!-- AI SETUP -->
+<section class="sheet" id="aiSheet" hidden aria-label="AI video reading">
+  <div class="sheetbar"><button type="button" class="iconbtn" id="aiBack">&larr; Recipes</button><b>AI video reading</b><span style="width:60px"></span></div>
+  <div class="sheetbody">
+    <div class="notice" id="aiState"></div>
+    <div class="panel">
+      <h3>What it does</h3>
+      <p style="margin:0">Google's Gemini AI watches a cooking video, listening to what's said and reading what's on screen, then writes out the recipe with amounts, steps and estimated macros.</p>
+      <ul style="margin:0;padding-left:18px;display:grid;gap:4px"><li><b>YouTube:</b> paste the link. If the description has no recipe, AI watches it automatically.</li><li><b>TikTok / Instagram:</b> save the video to your phone, then tap <b>Upload a cooking video</b>.</li></ul>
+    </div>
+    <div class="panel">
+      <h3>Get your free key (2 minutes)</h3>
+      <ol style="margin:0;padding-left:18px;display:grid;gap:6px">
+        <li>Open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--accent)">aistudio.google.com/apikey</a> and sign in with your Google account.</li>
+        <li>Tap <b>Create API key</b>. If it asks for a project, pick the default or create one.</li>
+        <li>Copy the key (it starts with <span class="num">AIza</span>) and paste it below.</li>
+      </ol>
+      <div class="row"><input id="aiKey" class="field" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste your key"><button type="button" class="btn primary" id="aiSave">Save key</button></div>
+      <div class="err" id="aiErr" hidden></div>
+      <div class="src">The key is stored in your Google Sheet's script settings, not in this app. On Google's free plan, Google may use what you send to improve its products.</div>
+      <button type="button" class="btn danger" id="aiRemove" hidden style="justify-self:start">Remove key</button>
+    </div>
+  </div>
+</section>
+
+<div class="busy" id="busy" hidden role="status"><div class="busycard"><span class="spin" style="width:22px;height:22px"></span><b id="busyTitle">AI is watching the video…</b><span class="src" id="busySub">This usually takes 20–60 seconds. Keep the app open.</span></div></div>
 
 <!-- COOKING MODE -->
 <section class="sheet" id="cook" hidden aria-label="Cooking mode">
@@ -300,6 +345,7 @@ const LS="recipes.v1";
 function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 
+let aiReady=lsGet(LS+".ai")===true;
 let recipes=[], grocery=[], filterTag="All", query="", openId=null, servings=null;
 const cached=lsGet(LS); if(cached){recipes=cached.recipes||[];grocery=cached.grocery||[]}
 const cache=()=>lsSet(LS,{recipes,grocery});
@@ -328,7 +374,7 @@ async function load(){
     const r=await fetch(API.url+"?action=recipes&key="+encodeURIComponent(API.key)); const j=await r.json();
     if(j.error) throw new Error(j.error);
     if(queue.length) return;
-    recipes=j.recipes||[]; grocery=j.grocery||[]; cache(); renderAll();
+    recipes=j.recipes||[]; grocery=j.grocery||[]; aiReady=!!j.aiReady; lsSet(LS+".ai",aiReady); cache(); renderAll(); renderAi();
     $("status").textContent="Synced "+new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
   }catch(e){$("status").textContent=String(e.message).includes("bad_request")?"Update your Apps Script to turn on recipes.":"Offline. Showing saved copy."}
 }
@@ -523,6 +569,85 @@ $("importForm").addEventListener("submit",async e=>{
   finally{btn.disabled=false;btn.textContent="Import"}
 });
 
+/* ---------- AI video reading ---------- */
+function renderAi(){
+  $("aiMenuSub").textContent=aiReady?"On · Gemini is set up":"Set up your free Gemini key";
+  $("aiHint").textContent=aiReady?"AI watches it and writes the recipe":"needs your free AI key (menu)";
+  $("aiState").className="notice"+(aiReady?"":" warn");
+  $("aiState").textContent=aiReady?"AI video reading is on.":"AI video reading is off. Add your free key below to turn it on.";
+  $("aiRemove").hidden=!aiReady;
+}
+$("aiMenu").onclick=()=>{closeMenu();renderAi();$("aiSheet").hidden=false};
+$("aiBack").onclick=()=>{$("aiSheet").hidden=true};
+async function saveKey(k){
+  const err=$("aiErr"); err.hidden=true; $("aiSave").disabled=true; $("aiSave").textContent="Checking…";
+  try{const j=await post({action:"setAiKey",aiKey:k});
+    if(j.error==="bad_request") throw new Error("Update your Apps Script first, then try again.");
+    if(j.error) throw new Error(j.message||"That key didn't work.");
+    aiReady=!!j.aiReady; lsSet(LS+".ai",aiReady); $("aiKey").value=""; renderAi(); toast(aiReady?"AI video reading is on.":"Key removed.");
+  }catch(e){err.textContent=e.message;err.hidden=false}
+  finally{$("aiSave").disabled=false;$("aiSave").textContent="Save key"}
+}
+$("aiSave").onclick=()=>{const k=$("aiKey").value.trim();if(k)saveKey(k)};
+$("aiRemove").onclick=()=>saveKey("");
+
+const MAXMB=25;
+function readB64(file){return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result));fr.onerror=()=>rej(new Error("Couldn't read that file."));fr.readAsDataURL(file)})}
+function frameOf(file){return new Promise(res=>{
+  try{const v=document.createElement("video");v.muted=true;v.playsInline=true;v.preload="auto";v.src=URL.createObjectURL(file);
+    const done=x=>{try{URL.revokeObjectURL(v.src)}catch(e){}res(x)};
+    v.onloadeddata=()=>{try{v.currentTime=Math.min(1.5,(v.duration||2)/3)}catch(e){done("")}};
+    v.onseeked=()=>{try{const w=360,h=Math.round(w*v.videoHeight/v.videoWidth)||480;const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(v,0,0,w,h);done(c.toDataURL("image/jpeg",.6))}catch(e){done("")}};
+    v.onerror=()=>done(""); setTimeout(()=>done(""),6000);
+  }catch(e){res("")}})}
+async function pickVideo(input,merge){
+  const f=input.files&&input.files[0]; input.value=""; if(!f) return;
+  if(!aiReady){$("aiSheet").hidden=false;renderAi();toast("Add your free AI key first.");return}
+  if(f.size>MAXMB*1024*1024){toast(`That video is ${Math.round(f.size/1048576)} MB. Trim it under ${MAXMB} MB (about a minute) and try again.`);return}
+  const [data,frame]=await Promise.all([readB64(f),frameOf(f)]);
+  runAI({data,mime:f.type||"video/mp4"},merge,frame);
+}
+$("vidFile").onchange=e=>pickVideo(e.target,false);
+async function runAI(req,merge,frame){
+  $("busyTitle").textContent="AI is watching the video…"; $("busy").hidden=false;
+  try{
+    const j=await post(Object.assign({action:"aiVideo"},req));
+    if(j.error==="bad_request") throw new Error("Update your Apps Script to turn on AI video reading.");
+    if(j.error) throw new Error(j.message||"AI couldn't read that video.");
+    const r=j.recipe;
+    if(!r.ingredients.length) throw new Error("AI didn't find a recipe in that video.");
+    const t=new Set((r.tags||[]).filter(x=>PRESET_TAGS.includes(x))); if((r.nutrition||{}).protein>=30)t.add("High protein"); if(r.time&&r.time<=30)t.add("Quick"); r.tags=[...t];
+    if(merge&&draft){
+      const keep={id:draft.id,added:draft.added,video:draft.video,url:draft.url,image:draft.image||frame||"",fav:draft.fav,cooked:draft.cooked};
+      const notes=[draft.notes,r.notes].filter(Boolean).join(" ");
+      draft=Object.assign({},draft,r,keep,{title:r.title||draft.title,notes,fromVideo:true});
+      openEdit(draft,true);
+    }else{
+      openEdit(Object.assign({id:"r"+Date.now().toString(36),added:new Date().toISOString(),fav:false,cooked:[],url:"",video:"",image:frame||""},r),true);
+    }
+  }catch(e){toast(e.message)}
+  finally{$("busy").hidden=true}
+}
+
+/* ---------- links ---------- */
+const hostOf=u=>{try{return new URL(u).hostname.replace(/^www\./,"")}catch(e){return u}};
+function parseLinks(text){
+  return String(text||"").split("\n").map(l=>l.trim()).filter(Boolean).map(l=>{
+    const m=l.match(/(https?:\/\/\S+|(?:www\.)?[a-z0-9-]+\.[a-z]{2,}(?:\/\S*)?)/i); if(!m) return null;
+    let url=m[1].replace(/[)\].,]+$/,""); if(!/^https?:/i.test(url)) url="https://"+url;
+    const label=l.replace(m[1],"").replace(/[-–:|]+\s*$/,"").trim();
+    return {label:label||hostOf(url),url};
+  }).filter(Boolean).slice(0,20);
+}
+function linkify(t){return esc(t).replace(/(https?:\/\/[^\s<]+)/g,u=>`<a href="${u}" target="_blank" rel="noopener" style="color:var(--accent)">${u}</a>`)}
+function linksPanel(r){
+  const rows=[];
+  if(r.url&&!isVideo(r.url)) rows.push({label:"Original recipe",sub:hostOf(r.url),url:r.url,icon:"🔗"});
+  const v=videoInfo(r.video); if(v) rows.push({label:"Watch on "+v.kind,sub:hostOf(r.video),url:r.video,icon:"▶"});
+  (r.links||[]).forEach(l=>rows.push({label:l.label||hostOf(l.url),sub:hostOf(l.url),url:l.url,icon:videoInfo(l.url)?"▶":"↗"}));
+  return `<div class="panel"><div class="sectionhead"><h3>Links</h3><button type="button" class="linkedit" id="lEdit">Add link</button></div><div class="links">${rows.length?"":'<div class="src">No links yet. Tap Add link to save the original page, a video, or anything related.</div>'}${rows.map(x=>`<a class="linkrow" href="${esc(x.url)}" target="_blank" rel="noopener"><span class="lic" aria-hidden="true">${x.icon}</span><span class="lt"><b>${esc(x.label)}</b><span>${esc(x.sub)}</span></span><span aria-hidden="true">↗</span></a>`).join("")}</div></div>`;
+}
+
 /* ---------- detail ---------- */
 const byId=id=>recipes.find(r=>r.id===id);
 function openDetail(id){openId=id;const r=byId(id);if(!r)return;servings=r.servings||1;renderDetail();$("detail").hidden=false;$("detail").scrollTop=0}
@@ -530,7 +655,7 @@ function renderDetail(){
   const r=byId(openId); if(!r) return;
   const base=r.servings||1, f=servings/base, n=r.nutrition||{};
   $("dFav").textContent=r.fav?"★ Favorite":"☆ Favorite"; $("dFav").classList.toggle("on",!!r.fav); $("dFav").setAttribute("aria-pressed",!!r.fav);
-  const mac=(k,l,u,c)=>`<div class="macro ${c||""}"><span class="lbl">${l}</span><span class="v num ${n[k]==null?"na":""}">${n[k]==null?"–":n[k]+(u||"")}</span></div>`;
+  const mac=(k,l,u,c)=>`<div class="macro ${c||""}"><span class="lbl">${l}${r.nutritionEstimated&&n[k]!=null?'<span class="est">est.</span>':""}</span><span class="v num ${n[k]==null?"na":""}">${n[k]==null?"–":n[k]+(u||"")}</span></div>`;
   const cooked=r.cooked||[];
   const last=cooked.length?new Date(cooked[cooked.length-1]+"T12:00").toLocaleDateString(undefined,{month:"short",day:"numeric"}):"";
   let host=""; try{host=new URL(r.url).hostname.replace(/^www\./,"")}catch(e){}
@@ -555,7 +680,9 @@ function renderDetail(){
       ${f!==1?`<div class="src">Scaled from ${base} serving${base===1?"":"s"}. Macros above stay per serving.</div>`:""}
     </div>
     <div class="panel"><h3>Steps</h3>${(r.steps||[]).length?`<ol class="steps">${r.steps.map(s=>`<li><span>${esc(stepFor(s))}</span></li>`).join("")}</ol>`:'<div class="src">No steps yet. Tap Edit to add them.</div>'}</div>
-    ${r.notes?`<div class="panel"><h3>Notes</h3><div style="white-space:pre-wrap">${esc(r.notes)}</div></div>`:""}`;
+    ${linksPanel(r)}
+    ${r.notes?`<div class="panel"><h3>Notes</h3><div style="white-space:pre-wrap">${linkify(r.notes)}</div></div>`:""}`;
+  if($("lEdit")) $("lEdit").onclick=()=>{$("dEdit").click();setTimeout(()=>{$("eLinks").scrollIntoView({block:"center"});$("eLinks").focus()},50)};
   $("sMinus").onclick=()=>{if(servings>1){servings--;renderDetail()}};
   $("sPlus").onclick=()=>{servings++;renderDetail()};
   $("aCook").onclick=()=>openCook();
@@ -570,6 +697,7 @@ function renderDetail(){
     saveGrocery(); toast(`Added ${(r.ingredients||[]).length} items to your grocery list.`);
   };
   $("aLoseIt").onclick=async()=>{
+    if(!r.url){toast("This one came from an uploaded video, so there's no link. In Lose It, use Create Recipe and add the ingredients.");return}
     if(isVideo(r.url)){toast(`Lose It can't read ${videoInfo(r.url).kind} links. Paste the creator's written-recipe link into Edit → Recipe link first.`);return}
     try{await navigator.clipboard.writeText(r.url);toast("Link copied. In Lose It: Create Recipe → Enter from Website → paste.")}
     catch(e){toast("Couldn't copy. Long-press the site link above to copy it.")}
@@ -588,14 +716,18 @@ function openEdit(r,isNew){
   $("eTitle").value=r.title||""; $("eServ").value=r.servings||""; $("eTime").value=r.time||"";
   $("eCal").value=n.calories??""; $("ePro").value=n.protein??""; $("eCarb").value=n.carbs??""; $("eFat").value=n.fat??"";
   $("eIng").value=(r.ingredients||[]).join("\n"); $("eSteps").value=(r.steps||[]).join("\n");
-  $("eNotes").value=r.notes||""; $("eImg").value=r.image||""; $("eUrl").value=r.url||""; $("eVideo").value=r.video||"";
+  $("eNotes").value=r.notes||""; $("eLinks").value=(r.links||[]).map(l=>(l.label&&l.label!==hostOf(l.url)?l.label+" ":"")+l.url).join("\n"); $("eImg").value=String(r.image||"").startsWith("data:")?"":(r.image||""); $("eImg").placeholder=String(r.image||"").startsWith("data:")?"Using a frame from the video":""; $("eUrl").value=r.url||""; $("eVideo").value=r.video||"";
   let note="";
-  if(isNew&&r.partial&&r.fromVideo) note='<div class="notice warn">Saved the video, but its caption has no recipe to read. Add the ingredients and steps you need, or paste the creator\'s written-recipe link into Recipe link.</div>';
+  const v=videoInfo(r.video), aiBtn=(r.fromVideo&&v)?(v.kind==="YouTube"?'<button type="button" class="btn primary" id="eAI">Have AI watch the video</button>':`<label class="btn primary" for="vidFile2">Upload the video for AI</label><input id="vidFile2" type="file" accept="video/*" hidden><div class="src" style="margin-top:6px">Save it first: in ${v.kind}, tap Share → ${v.kind==="TikTok"?"Save video":"screen record the reel"}.</div>`):"";
+  if(isNew&&r.byAI) note=`<div class="notice">AI watched the video and wrote this out. Amounts marked "(est.)" were guessed${r.nutritionEstimated?", and the macros are AI estimates. Swap in Lose It's numbers if they differ":""}. Check it over, then Save.</div>`;
+  else if(isNew&&r.partial&&r.fromVideo) note='<div class="notice warn">Saved the video, but its caption has no recipe to read. Let AI watch it instead, or fill in what you need.'+aiBtn+'</div>';
   else if(isNew&&r.partial) note='<div class="notice warn">This site doesn\'t share its recipe in a readable format, so fill in what you need. Tip: Lose It\'s importer may still read it.</div>';
   else if(isNew&&r.fromVideo&&!isVideo(r.url)){let h="";try{h=new URL(r.url).hostname.replace(/^www\./,"")}catch(e){}note=`<div class="notice">Found the written recipe on ${esc(h||"the creator's site")} from the video's caption${(r.nutrition||{}).calories!=null?", with nutrition":""}. The video is saved too. Check it over, add tags, then Save.</div>`}
-  else if(isNew&&r.fromVideo) note='<div class="notice">Saved the video. There was no written-recipe link, so these ingredients and steps were read from the caption itself. Check them over before saving.</div>';
+  else if(isNew&&r.fromVideo) note='<div class="notice">Saved the video. These ingredients and steps were read from the caption. If anything is missing, let AI watch the video.'+aiBtn+'</div>';
   else if(isNew) note=`<div class="notice">Imported${(r.nutrition||{}).calories!=null?" with the site's nutrition":", but the site doesn't list nutrition. Add Lose It's numbers below once you import it there"}. Check it over, add tags, then Save.</div>`;
   $("eNotice").innerHTML=note;
+  if($("eAI")) $("eAI").onclick=()=>runAI({url:draft.video},true);
+  if($("vidFile2")) $("vidFile2").onchange=e=>pickVideo(e.target,true);
   $("eDelete").innerHTML=isNew?"":'<button type="button" class="btn danger" id="eDel">Delete recipe</button><span id="eDelConfirm" hidden class="row" style="margin-top:8px"><span class="src">Delete this recipe for good?</span><button type="button" class="btn danger" id="eDelYes">Delete</button><button type="button" class="btn" id="eDelNo">Keep</button></span>';
   if(!isNew){$("eDel").onclick=()=>{$("eDelConfirm").hidden=false};$("eDelNo").onclick=()=>{$("eDelConfirm").hidden=true};
     $("eDelYes").onclick=()=>{const id=draft.id;$("edit").hidden=true;draft=null;deleteWithUndo(id)}}
@@ -612,9 +744,12 @@ $("eCancel").onclick=()=>{$("edit").hidden=true;draft=null};
 $("eSave").onclick=()=>{
   const num=id=>{const v=$(id).value.trim();return v===""?null:Math.round(Number(v))};
   const lines=id=>$(id).value.split("\n").map(s=>s.trim()).filter(Boolean);
+  const n0=draft.nutrition||{}; if(["eCal","ePro","eCarb","eFat"].some((id,i)=>num(id)!==(n0[["calories","protein","carbs","fat"][i]]??null))) draft.nutritionEstimated=false;
+  const imgField=$("eImg").value.trim(), keepImg=String(draft.image||"").startsWith("data:")?draft.image:"";
   Object.assign(draft,{title:$("eTitle").value.trim()||"Untitled recipe",servings:num("eServ"),time:num("eTime"),
     nutrition:{calories:num("eCal"),protein:num("ePro"),carbs:num("eCarb"),fat:num("eFat")},
-    ingredients:lines("eIng"),steps:lines("eSteps"),notes:$("eNotes").value.trim(),image:$("eImg").value.trim(),url:$("eUrl").value.trim()});
+    ingredients:lines("eIng"),steps:lines("eSteps"),notes:$("eNotes").value.trim(),links:parseLinks($("eLinks").value),image:imgField||keepImg,url:$("eUrl").value.trim()});
+  delete draft.byAI;
   {const v=$("eVideo").value.trim(); draft.video=isVideo(v)?v:"";}
   delete draft.partial;
   const i=recipes.findIndex(x=>x.id===draft.id); if(i>=0) recipes[i]=draft; else recipes.unshift(draft);
