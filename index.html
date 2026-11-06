@@ -141,6 +141,41 @@ table.grid td.st{padding-left:10px;white-space:nowrap;color:var(--muted);font-fa
 @keyframes medalIn{0%{transform:scale(.2) rotate(-25deg);opacity:0}100%{transform:none;opacity:1}}
 @keyframes fadeUp{0%{transform:translateY(12px);opacity:0}100%{transform:none;opacity:1}}
 @keyframes shine{0%{transform:rotate(20deg) translateX(0)}100%{transform:rotate(20deg) translateX(260px)}}
+.appbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:nowrap}
+.appbar h1{font-size:clamp(24px,6vw,34px)}
+.menuwrap{position:relative}
+.viewbtn{display:flex;align-items:center;gap:8px;background:var(--raised);border:1px solid var(--line);border-radius:99px;padding:8px 14px;font-weight:600;white-space:nowrap}
+.viewbtn[aria-expanded="true"]{border-color:var(--accent)}
+.viewbtn:focus-visible,.menu button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.menu{position:absolute;right:0;top:calc(100% + 8px);z-index:6;width:min(280px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px;display:grid;gap:2px;box-shadow:0 16px 40px rgba(0,0,0,.5)}
+.menu button{display:grid;gap:2px;text-align:left;background:none;border:0;border-radius:8px;padding:10px 12px}
+.menu button b{font-weight:600}
+.menu button span{font-size:12px;color:var(--muted)}
+.menu button:hover{background:var(--raised)}
+.menu button[aria-current="true"]{background:var(--accent-soft)}
+.menu button[aria-current="true"] b{color:var(--accent)}
+.datebar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.view{display:grid;gap:20px}
+.checkpanel{max-width:760px;width:100%;margin-inline:auto}
+.checkpanel .habits{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+/* compact checklist: everything on one phone screen */
+.checkpanel{padding:14px;gap:10px}
+.checkpanel .phead h2{font-size:17px}
+.checkpanel .score{font-size:24px}
+.checkpanel .habits{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.checkpanel .habit{min-height:42px;padding:7px 8px;gap:7px;border-radius:9px}
+.checkpanel .habit .box{width:17px;height:17px;border-radius:4px}
+.checkpanel .habit .name{font-size:13px;line-height:1.15}
+.checkpanel .habit .auto{display:inline;font-size:9.5px;margin-left:4px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.checkpanel .habit[aria-pressed="true"] .auto{color:var(--muted)}
+@media (min-width:700px){.checkpanel .habits{grid-template-columns:repeat(4,minmax(0,1fr))}.checkpanel .habit{min-height:48px}.checkpanel .habit .name{font-size:14px}}
+.checkpanel .workout{padding-top:10px;gap:6px}
+.checkpanel .worow select,.checkpanel .worow input{padding:8px 10px}
+.checkpanel .worow .primary{padding:8px 16px}
+.appfoot{text-align:center;font-size:12px;color:var(--muted)}
+.wrap{padding-block:14px 32px;gap:14px}
+.autohead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-top:2px}
+.checkpanel .habits.autos{grid-template-columns:repeat(2,minmax(0,1fr))}
 </style>
 <style>
 html{-webkit-text-size-adjust:100%}
@@ -152,27 +187,33 @@ img{max-width:100%}[hidden]{display:none!important}
 
 
 <div class="wrap">
-  <header>
-    <div>
-      <div class="lbl">Habits + Lose It</div>
-      <h1>Daily Ledger</h1>
-    </div>
-    <div style="display:grid;gap:4px;justify-items:end">
-      <div class="datenav">
-        <button class="nav" id="prev" aria-label="Previous day">&larr;</button>
-        <div id="dateLabel" class="num">&nbsp;</div>
-        <button class="nav" id="next" aria-label="Next day">&rarr;</button>
-        <button class="nav" id="today">Today</button>
+  <header class="appbar">
+    <h1>Daily Ledger</h1>
+    <div class="menuwrap">
+      <button type="button" class="viewbtn" id="viewBtn" aria-haspopup="true" aria-expanded="false" aria-controls="viewMenu"><span id="viewName">Habits</span><svg viewBox="0 0 12 8" width="12" height="8" aria-hidden="true"><path d="M1 1.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="menu" id="viewMenu" hidden>
+        <button type="button" data-v="today"><b>Habits</b><span>Today's checklist and workouts</span></button>
+        <button type="button" data-v="food"><b>Food</b><span>Calories, protein and 30-day charts</span></button>
+        <button type="button" data-v="trends"><b>Streaks &amp; Trends</b><span>Gold Days, workouts and habit history</span></button>
       </div>
-      <div class="status"><span id="status">Loading…</span> · <button class="linkbtn" id="reconnect">Connection</button></div>
     </div>
   </header>
+  <div class="datebar" id="datebar">
+    <div class="datenav">
+      <button class="nav" id="prev" aria-label="Previous day">&larr;</button>
+      <div id="dateLabel" class="num">&nbsp;</div>
+      <button class="nav" id="next" aria-label="Next day">&rarr;</button>
+      <button class="nav" id="today">Today</button>
+    </div>
+  </div>
 
-  <section class="top">
-    <div class="panel">
-      <div class="phead"><h2>Checklist</h2><div class="scorewrap"><span class="goldtag" id="goldTag" hidden>Gold day</span><span class="score num" id="score">0/12</span></div></div>
+  <main class="view" data-view="today">
+    <div class="panel checkpanel">
+      <div class="phead"><h2>Checklist</h2><div class="scorewrap"><span class="goldtag" id="goldTag" hidden>Gold day</span><span class="score num" id="score">0</span></div></div>
       <div class="goldmeter" aria-hidden="true"><i id="goldBar"></i><span class="goldmark"></span></div>
       <div class="habits" id="habits"></div>
+      <div class="autohead"><span class="lbl">From Lose It</span><span class="src">fills in the next morning</span></div>
+      <div class="habits autos" id="habitsAuto"></div>
       <div class="workout">
         <div class="phead"><span class="lbl">Workouts</span><span class="src" id="woHint">Adding one checks off Exercise</span></div>
         <div class="worow">
@@ -184,6 +225,9 @@ img{max-width:100%}[hidden]{display:none!important}
         <ul class="wolist" id="woList"></ul>
       </div>
     </div>
+  </main>
+
+  <main class="view" data-view="food" hidden>
     <div class="panel">
       <div class="phead"><h2>Food</h2><span class="src" id="foodSrc">No Lose It data yet</span></div>
       <div class="meter">
@@ -202,19 +246,6 @@ img{max-width:100%}[hidden]{display:none!important}
       </div>
       <div class="src">Numbers fill in each morning from Lose It's daily email. Type over them any time.</div>
     </div>
-  </section>
-
-  <section class="panel goldpanel">
-    <div class="phead"><h2>Gold Days</h2><span class="src">8 or more of 12 habits in a day</span></div>
-    <div class="goldstats">
-      <div><span class="lbl">This month</span><span class="gnum num" id="gMonth">0</span></div>
-      <div><span class="lbl">Current streak</span><span class="gnum num" id="gStreak">0</span></div>
-      <div><span class="lbl">Best streak</span><span class="gnum num" id="gBest">0</span></div>
-      <div><span class="lbl">All time</span><span class="gnum num" id="gAll">0</span></div>
-    </div>
-    <div class="goldstrip" id="goldStrip"></div>
-  </section>
-
   <section class="charts">
     <div class="panel">
       <div class="phead"><h2>Calories, last 30 days</h2><span class="src">line = budget</span></div>
@@ -225,16 +256,29 @@ img{max-width:100%}[hidden]{display:none!important}
       <div id="proChart"></div>
     </div>
   </section>
+  </main>
 
+  <main class="view" data-view="trends" hidden>
+  <section class="panel goldpanel">
+    <div class="phead"><h2>Gold Days</h2><span class="src" id="goldRule">8 or more habits in a day</span></div>
+    <div class="goldstats">
+      <div><span class="lbl">This month</span><span class="gnum num" id="gMonth">0</span></div>
+      <div><span class="lbl">Current streak</span><span class="gnum num" id="gStreak">0</span></div>
+      <div><span class="lbl">Best streak</span><span class="gnum num" id="gBest">0</span></div>
+      <div><span class="lbl">All time</span><span class="gnum num" id="gAll">0</span></div>
+    </div>
+    <div class="goldstrip" id="goldStrip"></div>
+  </section>
   <section class="panel">
     <div class="phead"><h2>Workouts, last 30 days</h2><span class="src num" id="woTotal"></span></div>
     <div id="woChart"></div>
   </section>
-
   <section class="panel">
     <div class="phead"><h2 id="gridTitle">Last 8 weeks</h2><span class="src">streak · 30-day rate</span></div>
     <div class="gridwrap"></div>
   </section>
+  </main>
+  <footer class="appfoot"><span id="status">Loading…</span> · <button class="linkbtn" id="reconnect">Connection</button></footer>
 </div>
 <div class="tip" id="tip" hidden></div>
 
@@ -277,10 +321,13 @@ img{max-width:100%}[hidden]{display:none!important}
 </div>
 <script>
 
+// [id, full name, auto from Lose It?, short name for the checklist tiles]
 const HABITS=[
- ["exercise","Exercise"],["pullups","Pull-ups"],["meditate","Meditate"],["read","Read"],
- ["protein","Protein Goal","auto"],["undercal","Under Calorie Goal","auto"],["cookhome","Cook / Eat 1 Meal at Home"],
- ["floss","Floss"],["brushpm","Brush Teeth PM"],["bed10","In Bed by 10p"],["nosmoke","No Smoke"],["nodrink","No Drink"]
+ ["exercise","Exercise",0,"Exercise"],["pullups","Pull-ups",0,"Pull-ups"],["creatine","Creatine",0,"Creatine"],
+ ["meditate","Meditate",0,"Meditate"],["read","Read",0,"Read"],["cookhome","Cook / Eat 1 Meal at Home",0,"Cook at home"],
+ ["protein","Protein Goal","auto","Protein goal"],["undercal","Under Calorie Goal","auto","Under calories"],["floss","Floss",0,"Floss"],
+ ["brushpm","Brush Teeth PM",0,"Brush PM"],["bed10","In Bed by 10p",0,"Bed by 10"],["nosmoke","No Smoke",0,"No smoke"],
+ ["nodrink","No Drink",0,"No drink"]
 ];
 const $=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,"0");
@@ -323,12 +370,12 @@ function renderGold(){
   const g=goldStats();
   $("gMonth").textContent=g.monthN; $("gStreak").textContent=g.cur; $("gBest").textContent=g.best; $("gAll").textContent=g.all;
   let h=""; for(let i=29;i>=0;i--){const k=addDays(TODAY,-i);
-    h+=`<i class="${isGold(k)?"g":""}${k===cur?" t":""}" data-k="${k}" data-tip="${fromKey(k).toLocaleDateString(undefined,{month:"short",day:"numeric"})}: ${doneCount(k)}/12${isGold(k)?" · Gold":""}"></i>`}
+    h+=`<i class="${isGold(k)?"g":""}${k===cur?" t":""}" data-k="${k}" data-tip="${fromKey(k).toLocaleDateString(undefined,{month:"short",day:"numeric"})}: ${doneCount(k)}/${HABITS.length}${isGold(k)?" · Gold":""}"></i>`}
   $("goldStrip").innerHTML=h;
 }
 let confettiRaf=0;
 function celebrate(n){
-  $("celeSub").textContent=n+" of 12 habits · "+fromKey(cur).toLocaleDateString(undefined,{weekday:"long"});
+  $("celeSub").textContent=n+" of "+HABITS.length+" habits · "+fromKey(cur).toLocaleDateString(undefined,{weekday:"long"});
   const ov=$("celebrate"); ov.hidden=false; $("celeClose").focus();
   try{navigator.vibrate&&navigator.vibrate([30,40,60])}catch(e){}
   if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -351,18 +398,17 @@ function renderDay(){
   const dt=fromKey(cur);
   $("dateLabel").textContent=dt.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
   $("next").disabled=cur>=TODAY;
-  const hb=$("habits"); hb.textContent="";
+  const hb=$("habits"), ha=$("habitsAuto"); hb.textContent=""; ha.textContent="";
   let done=0;
-  for(const [id,name,auto] of HABITS){
+  for(const [id,full,auto,name] of HABITS){
     const on=isDone(cur,id); if(on) done++;
     const b=document.createElement("button");
     b.className="habit"; b.id="h-"+id; b.setAttribute("aria-pressed",on);
     b.disabled=readOnly;
     b.innerHTML='<span class="box"></span><span class="name"></span>';
-    b.querySelector(".name").textContent=name;
-    if(auto){const s=document.createElement("span");s.className="auto";s.textContent="auto from Lose It";b.querySelector(".name").appendChild(s)}
+    b.querySelector(".name").textContent=name; b.title=full+(auto?" (fills in from Lose It)":"");
     b.onclick=()=>toggle(id);
-    hb.appendChild(b);
+    (auto?ha:hb).appendChild(b);
   }
   $("score").textContent=done+"/"+HABITS.length;
   $("score").classList.toggle("gold",done>=GOLD); $("goldTag").hidden=done<GOLD;
@@ -415,7 +461,7 @@ function renderGrid(){
   const cell=(k,id,name)=>`${isDone(k,id)?" y":""}${k===cur?" sel":""}" data-k="${k}" data-tip="${name} · ${fromKey(k).toLocaleDateString(undefined,{month:"short",day:"numeric"})}: ${isDone(k,id)?"done":"not done"}"`;
   const gw=document.querySelector(".gridwrap");
   if(phone){
-    let h='<div class="mgrid">'+`<div class="mrow"><div class="mhead"><span style="color:var(--gold);font-weight:600">Gold day</span><span class="st">${goldStats().cur}d streak</span></div><div class="mcells" style="grid-template-columns:repeat(${n},1fr)">`+ks.map(k=>`<div class="c${isGold(k)?" gd":""}${k===cur?" sel":""}" data-k="${k}" data-tip="${doneCount(k)}/12"></div>`).join('')+'</div></div>';
+    let h='<div class="mgrid">'+`<div class="mrow"><div class="mhead"><span style="color:var(--gold);font-weight:600">Gold day</span><span class="st">${goldStats().cur}d streak</span></div><div class="mcells" style="grid-template-columns:repeat(${n},1fr)">`+ks.map(k=>`<div class="c${isGold(k)?" gd":""}${k===cur?" sel":""}" data-k="${k}" data-tip="${doneCount(k)}/${HABITS.length}"></div>`).join('')+'</div></div>';
     for(const [id,name] of HABITS){
       h+=`<div class="mrow"><div class="mhead"><span>${name}</span><span class="st">${streak(id)}d · ${rate(id)}%</span></div><div class="mcells" style="grid-template-columns:repeat(${n},1fr)">`;
       ks.forEach(k=>{h+=`<div class="c${cell(k,id,name)}></div>`});
@@ -427,7 +473,7 @@ function renderGrid(){
   let h='<table class="grid"><thead><tr><th></th>';
   ks.forEach((k,i)=>{h+=`<th style="font-size:10px;color:var(--muted);font-weight:400;padding:0">${i%7===0?fromKey(k).getDate():""}</th>`});
   h+="<th></th></tr></thead><tbody>";
-  h+=`<tr><th scope="row" style="color:var(--gold);font-weight:600">Gold day</th>`+ks.map(k=>`<td class="c${isGold(k)?" gd":""}${k===cur?" sel":""}" data-k="${k}" data-tip="${doneCount(k)}/12"></td>`).join("")+`<td class="st">${goldStats().cur}d streak</td></tr>`;
+  h+=`<tr><th scope="row" style="color:var(--gold);font-weight:600">Gold day</th>`+ks.map(k=>`<td class="c${isGold(k)?" gd":""}${k===cur?" sel":""}" data-k="${k}" data-tip="${doneCount(k)}/${HABITS.length}"></td>`).join("")+`<td class="st">${goldStats().cur}d streak</td></tr>`;
   for(const [id,name] of HABITS){
     h+=`<tr><th scope="row">${name}</th>`;
     ks.forEach(k=>{h+=`<td class="c${cell(k,id,name)}></td>`});
@@ -486,11 +532,11 @@ numInput("budIn","calorieBudget","settings");numInput("goalIn","proteinGoal","se
 $("celeClose").onclick=()=>{$("celebrate").hidden=true};
 $("celebrate").addEventListener("click",e=>{if(e.target.id==="celebrate")$("celebrate").hidden=true});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("celebrate").hidden=true});
-$("goldStrip").addEventListener("click",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k){cur=k;render();window.scrollTo({top:0,behavior:"smooth"})}});
+$("goldStrip").addEventListener("click",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k){cur=k;render();setView("today")}});
 $("prev").onclick=()=>{cur=addDays(cur,-1);render()};
 $("next").onclick=()=>{if(cur<TODAY){cur=addDays(cur,1);render()}};
 $("today").onclick=()=>{cur=TODAY;render()};
-document.querySelector(".gridwrap").addEventListener("click",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k){cur=k;render();window.scrollTo({top:0,behavior:"smooth"})}});
+document.querySelector(".gridwrap").addEventListener("click",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k){cur=k;render();setView("today")}});
 
 const tip=$("tip");
 window.addEventListener("resize",()=>renderGrid());
@@ -510,6 +556,28 @@ $("woAdd").onclick=()=>{
   saveDay({workouts:arr,habits:{exercise:true}});
   sel.value="";$("woOther").value="";$("woOther").hidden=true;
 };
+
+/* ---------- screens ---------- */
+const VIEWS={today:"Habits",food:"Food",trends:"Streaks & Trends"};
+let view="today";
+function setView(v){
+  view=v;
+  document.querySelectorAll(".view").forEach(el=>el.hidden=el.dataset.view!==v);
+  $("viewName").textContent=VIEWS[v];
+  $("datebar").hidden=v==="trends";
+  document.querySelectorAll("#viewMenu button").forEach(b=>b.setAttribute("aria-current",b.dataset.v===v));
+  closeMenu();
+  if(v==="trends") renderGrid();
+  window.scrollTo(0,0);
+}
+function closeMenu(){$("viewMenu").hidden=true;$("viewBtn").setAttribute("aria-expanded","false")}
+$("viewBtn").onclick=e=>{e.stopPropagation();const open=$("viewMenu").hidden;$("viewMenu").hidden=!open;$("viewBtn").setAttribute("aria-expanded",open);if(open)$("viewMenu").querySelector('[aria-current="true"]')?.focus()};
+$("viewMenu").addEventListener("click",e=>{const b=e.target.closest("button");if(b)setView(b.dataset.v)});
+document.addEventListener("click",e=>{if(!e.target.closest(".menuwrap"))closeMenu()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeMenu()});
+setView("today");
+document.querySelector(".goldmark").style.left=(GOLD/HABITS.length*100)+"%";
+$("goldRule").textContent=GOLD+" or more of "+HABITS.length+" habits in a day";
 
 /* ---------- storage: Google Sheet via Apps Script ---------- */
 const LS="ledger.v1";
