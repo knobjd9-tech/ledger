@@ -216,6 +216,11 @@ table.grid td.st{padding-left:10px;white-space:nowrap;color:var(--muted);font-fa
 .calkey span{display:flex;align-items:center;gap:5px}
 .calkey .k{width:7px;height:7px;border-radius:50%;background:var(--accent)}
 .calkey .k.gold{background:var(--gold)}
+.menu .menusep{border:0;border-top:1px solid var(--line);margin:4px 6px}
+.menu .menulink{display:grid;gap:2px;text-decoration:none;color:var(--ink);border-radius:8px;padding:10px 12px}
+.menu .menulink b{font-weight:600}
+.menu .menulink span{font-size:12px;color:var(--muted)}
+.menu .menulink:hover{background:var(--raised)}
 </style>
 <style>
 html{-webkit-text-size-adjust:100%}
@@ -235,6 +240,8 @@ img{max-width:100%}[hidden]{display:none!important}
         <button type="button" data-v="today"><b>Habits</b><span>Today's checklist and workouts</span></button>
         <button type="button" data-v="food"><b>Food</b><span>Calories, protein and 30-day charts</span></button>
         <button type="button" data-v="trends"><b>Streaks &amp; Trends</b><span>Gold Days, workouts and habit history</span></button>
+        <hr class="menusep">
+        <a href="recipes.html" class="menulink"><b>Recipes ↗</b><span>Find, cook and add recipes</span></a>
       </div>
     </div>
   </header>
