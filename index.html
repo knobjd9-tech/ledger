@@ -515,7 +515,9 @@ $("woAdd").onclick=()=>{
 const LS="ledger.v1";
 function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
-let conn=lsGet(LS+".conn");
+// Connection is built in so the app never asks. The Connection link can still override it.
+const BUILT_IN={url:"https://script.google.com/macros/s/AKfycbyaUKLvN21alTRATQmHNG3xtqFBP3xZciK7PpAwSXQrBx_rgIDD6GU7lV1eCqIW1smZnA/exec",key:"M64H-T3SR-93BT"};
+let conn=lsGet(LS+".conn")||BUILT_IN;
 function cache(){lsSet(LS+".data",{days,settings})}
 const queue=[];let busy=false;
 function enqueue(req){queue.push(req);$("status").textContent="Saving…";flush()}
