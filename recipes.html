@@ -155,6 +155,12 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .toast{display:flex;align-items:center;gap:12px;width:max-content}
 .toastbtn{background:none;border:0;color:#1550c8;font-weight:700;padding:2px 4px}
 .cards .swipe .card{border-radius:12px}
+.video{position:relative;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#000}
+.video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.video.tall{aspect-ratio:auto;height:min(580px,62dvh);max-width:340px;margin-inline:auto;background:#000}
+.video.ig{aspect-ratio:auto;height:min(560px,60dvh);max-width:420px;margin-inline:auto;background:#fff}
+.tw{position:relative;display:block;width:96px;height:96px}
+.play{position:absolute;right:6px;bottom:6px;width:24px;height:24px;border-radius:99px;background:rgba(0,0,0,.7);color:#fff;font-size:10px;display:grid;place-items:center;padding-left:2px}
 </style>
 </head>
 <body>
@@ -252,6 +258,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
     <label for="eSteps">Steps (one per line)<textarea id="eSteps" class="field" style="min-height:180px"></textarea></label>
     <label for="eNotes">Notes<textarea id="eNotes" class="field" style="min-height:70px" placeholder="Swaps, tips, what to change next time"></textarea></label>
     <label for="eImg">Photo link<input id="eImg" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off"></label>
+    <label for="eVideo">Video link: YouTube, TikTok or Instagram (optional)<input id="eVideo" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…"></label>
     <label for="eUrl">Recipe link<input id="eUrl" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off"></label>
     <div id="eDelete"></div>
   </form>
@@ -353,6 +360,22 @@ function scaleLine(line,f){
   return {q,rest};
 }
 
+/* ---------- videos: YouTube, TikTok, Instagram ---------- */
+const ytId=u=>{const m=String(u||"").match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);return m?m[1]:null};
+function videoInfo(u){
+  u=String(u||""); let m;
+  if((m=ytId(u))) return {kind:"YouTube",key:"yt:"+m,embed:`https://www.youtube-nocookie.com/embed/${m}?rel=0&playsinline=1`,cls:"wide"};
+  if((m=u.match(/tiktok\.com\/.*\/video\/(\d+)/))) return {kind:"TikTok",key:"tt:"+m[1],embed:`https://www.tiktok.com/embed/v2/${m[1]}`,cls:"tall"};
+  if(/tiktok\.com\//.test(u)) return {kind:"TikTok",key:"tt:"+u,embed:null};
+  if((m=u.match(/instagram\.com\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/))) return {kind:"Instagram",key:"ig:"+m[2],embed:`https://www.instagram.com/${m[1]==="p"?"p":"reel"}/${m[2]}/embed/`,cls:"ig"};
+  return null;
+}
+const isVideo=u=>!!videoInfo(u);
+function videoBlock(r){const v=videoInfo(r.video);if(!v)return "";
+  const link=`<a class="src" href="${esc(r.video)}" target="_blank" rel="noopener" style="color:var(--accent)">Open in ${v.kind} ↗</a>`;
+  if(!v.embed) return thumb(r,"hero")+link;
+  return `<div class="video ${v.cls}"><iframe src="${v.embed}" title="Recipe video" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" scrolling="no"></iframe></div>${link}`}
+
 /* ---------- grams ---------- */
 const ML={cup:236.6,tbsp:14.79,tsp:4.93,floz:29.57,pint:473.2,quart:946.4,gallon:3785};
 // grams per ml for common ingredients (checked in order, so more specific names come first)
@@ -433,7 +456,7 @@ function renderList(){
   const el=$("cards");
   if(!recipes.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><b>No recipes yet</b><span>Paste a recipe link above and tap Import. Most recipe sites come in with photo, ingredients, steps and often calories and protein.</span></div>';return}
   if(!list.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><b>No matches</b><span>Try another word or tag.</span></div>';return}
-  el.innerHTML=list.map(r=>`<div class="swipe" data-id="${esc(r.id)}"><button type="button" class="swdel" data-del="${esc(r.id)}" tabindex="-1" aria-label="Delete ${esc(r.title)}">Delete</button><button type="button" class="card" data-id="${esc(r.id)}">${thumb(r,"thumb")}<div class="cbody"><div class="ctitle">${r.fav?'<span class="star">★</span> ':""}${esc(r.title)}</div><div class="meta">${cardMeta(r)}</div></div></button></div>`).join("");
+  el.innerHTML=list.map(r=>`<div class="swipe" data-id="${esc(r.id)}"><button type="button" class="swdel" data-del="${esc(r.id)}" tabindex="-1" aria-label="Delete ${esc(r.title)}">Delete</button><button type="button" class="card" data-id="${esc(r.id)}"><span class="tw">${thumb(r,"thumb")}${r.video?'<span class="play" aria-label="Has video">▶</span>':""}</span><div class="cbody"><div class="ctitle">${r.fav?'<span class="star">★</span> ':""}${esc(r.title)}</div><div class="meta">${cardMeta(r)}</div></div></button></div>`).join("");
 }
 $("tagChips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(b){filterTag=b.dataset.t;renderList()}});
 $("search").addEventListener("input",e=>{query=e.target.value.trim();renderList()});
@@ -482,7 +505,7 @@ $("importForm").addEventListener("submit",async e=>{
   err.hidden=true;
   if(!m){err.textContent="Paste a full link that starts with https://";err.hidden=false;return}
   const url=m[0].replace(/[)\].,]+$/,"");
-  const dup=recipes.find(r=>r.url===url); if(dup){openDetail(dup.id);toast("You already saved this one.");return}
+  const vk=(videoInfo(url)||{}).key; const dup=recipes.find(r=>r.url===url||(vk&&(videoInfo(r.video)||{}).key===vk)); if(dup){openDetail(dup.id);toast("You already saved this one.");return}
   const btn=$("importBtn"); btn.disabled=true; btn.innerHTML='<span class="spin"></span>Importing';
   try{
     const j=await post({action:"importRecipe",url});
@@ -512,10 +535,10 @@ function renderDetail(){
   const last=cooked.length?new Date(cooked[cooked.length-1]+"T12:00").toLocaleDateString(undefined,{month:"short",day:"numeric"}):"";
   let host=""; try{host=new URL(r.url).hostname.replace(/^www\./,"")}catch(e){}
   $("dBody").innerHTML=`
-    ${thumb(r,"hero")}
+    ${r.video&&isVideo(r.video)?videoBlock(r):thumb(r,"hero")}
     <div style="display:grid;gap:6px">
       <h2 class="dtitle">${esc(r.title||"Untitled recipe")}</h2>
-      <div class="meta">${r.time?`<span>${r.time} min</span>`:""}${host?`<a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(host)} ↗</a>`:""}${cooked.length?`<span>Cooked ${cooked.length}× · last ${last}</span>`:""}</div>
+      <div class="meta">${r.time?`<span>${r.time} min</span>`:""}${host&&!isVideo(r.url)?`<a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(host)} ↗</a>`:""}${cooked.length?`<span>Cooked ${cooked.length}× · last ${last}</span>`:""}</div>
       ${(r.tags||[]).length?`<div class="chips">${r.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</div>`:""}
     </div>
     <div><div class="lbl" style="margin-bottom:6px">Per serving</div><div class="macros">${mac("calories","Cal","","cal")}${mac("protein","Protein","g")}${mac("carbs","Carbs","g")}${mac("fat","Fat","g")}</div></div>
@@ -547,6 +570,7 @@ function renderDetail(){
     saveGrocery(); toast(`Added ${(r.ingredients||[]).length} items to your grocery list.`);
   };
   $("aLoseIt").onclick=async()=>{
+    if(isVideo(r.url)){toast(`Lose It can't read ${videoInfo(r.url).kind} links. Paste the creator's written-recipe link into Edit → Recipe link first.`);return}
     try{await navigator.clipboard.writeText(r.url);toast("Link copied. In Lose It: Create Recipe → Enter from Website → paste.")}
     catch(e){toast("Couldn't copy. Long-press the site link above to copy it.")}
   };
@@ -564,9 +588,12 @@ function openEdit(r,isNew){
   $("eTitle").value=r.title||""; $("eServ").value=r.servings||""; $("eTime").value=r.time||"";
   $("eCal").value=n.calories??""; $("ePro").value=n.protein??""; $("eCarb").value=n.carbs??""; $("eFat").value=n.fat??"";
   $("eIng").value=(r.ingredients||[]).join("\n"); $("eSteps").value=(r.steps||[]).join("\n");
-  $("eNotes").value=r.notes||""; $("eImg").value=r.image||""; $("eUrl").value=r.url||"";
+  $("eNotes").value=r.notes||""; $("eImg").value=r.image||""; $("eUrl").value=r.url||""; $("eVideo").value=r.video||"";
   let note="";
-  if(isNew&&r.partial) note='<div class="notice warn">This site doesn\'t share its recipe in a readable format, so fill in what you need. Tip: Lose It\'s importer may still read it.</div>';
+  if(isNew&&r.partial&&r.fromVideo) note='<div class="notice warn">Saved the video, but its caption has no recipe to read. Add the ingredients and steps you need, or paste the creator\'s written-recipe link into Recipe link.</div>';
+  else if(isNew&&r.partial) note='<div class="notice warn">This site doesn\'t share its recipe in a readable format, so fill in what you need. Tip: Lose It\'s importer may still read it.</div>';
+  else if(isNew&&r.fromVideo&&!isVideo(r.url)){let h="";try{h=new URL(r.url).hostname.replace(/^www\./,"")}catch(e){}note=`<div class="notice">Found the written recipe on ${esc(h||"the creator's site")} from the video's caption${(r.nutrition||{}).calories!=null?", with nutrition":""}. The video is saved too. Check it over, add tags, then Save.</div>`}
+  else if(isNew&&r.fromVideo) note='<div class="notice">Saved the video. There was no written-recipe link, so these ingredients and steps were read from the caption itself. Check them over before saving.</div>';
   else if(isNew) note=`<div class="notice">Imported${(r.nutrition||{}).calories!=null?" with the site's nutrition":", but the site doesn't list nutrition. Add Lose It's numbers below once you import it there"}. Check it over, add tags, then Save.</div>`;
   $("eNotice").innerHTML=note;
   $("eDelete").innerHTML=isNew?"":'<button type="button" class="btn danger" id="eDel">Delete recipe</button><span id="eDelConfirm" hidden class="row" style="margin-top:8px"><span class="src">Delete this recipe for good?</span><button type="button" class="btn danger" id="eDelYes">Delete</button><button type="button" class="btn" id="eDelNo">Keep</button></span>';
@@ -588,6 +615,7 @@ $("eSave").onclick=()=>{
   Object.assign(draft,{title:$("eTitle").value.trim()||"Untitled recipe",servings:num("eServ"),time:num("eTime"),
     nutrition:{calories:num("eCal"),protein:num("ePro"),carbs:num("eCarb"),fat:num("eFat")},
     ingredients:lines("eIng"),steps:lines("eSteps"),notes:$("eNotes").value.trim(),image:$("eImg").value.trim(),url:$("eUrl").value.trim()});
+  {const v=$("eVideo").value.trim(); draft.video=isVideo(v)?v:"";}
   delete draft.partial;
   const i=recipes.findIndex(x=>x.id===draft.id); if(i>=0) recipes[i]=draft; else recipes.unshift(draft);
   cache(); enqueue({action:"saveRecipe",recipe:draft});
