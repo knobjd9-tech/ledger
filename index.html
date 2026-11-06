@@ -176,6 +176,20 @@ table.grid td.st{padding-left:10px;white-space:nowrap;color:var(--muted);font-fa
 .wrap{padding-block:14px 32px;gap:14px}
 .autohead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-top:2px}
 .checkpanel .habits.autos{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* Habits screen fills the phone: tiles stretch to use the spare height, never past one screen */
+.wrap.fill{min-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));grid-template-rows:auto auto 1fr auto}
+.wrap.fill main[data-view="today"]{display:flex;flex-direction:column}
+.wrap.fill .checkpanel{flex:1;display:flex;flex-direction:column}
+.wrap.fill .checkpanel .habits{flex:1 1 0;grid-auto-rows:minmax(42px,1fr);align-content:stretch}
+.wrap.fill .checkpanel .habit{min-height:0;max-height:110px}
+.checkpanel .habit .name{font-size:clamp(13px,3.6vw,15px)}
+.checkpanel .habit .box{width:clamp(17px,5vw,21px);height:clamp(17px,5vw,21px)}
+@media (max-height:720px){
+  .wrap{gap:10px;padding-block:10px 14px}
+  .checkpanel{gap:8px;padding:12px}
+  .wrap.fill .checkpanel .habits{grid-auto-rows:minmax(38px,1fr)}
+  .checkpanel .goldmeter{height:5px}
+}
 </style>
 <style>
 html{-webkit-text-size-adjust:100%}
@@ -410,6 +424,8 @@ function renderDay(){
     b.onclick=()=>toggle(id);
     (auto?ha:hb).appendChild(b);
   }
+  const cols=innerWidth>=700?4:3;
+  hb.style.flexGrow=Math.ceil(hb.children.length/cols); ha.style.flexGrow=Math.ceil(ha.children.length/2);
   $("score").textContent=done+"/"+HABITS.length;
   $("score").classList.toggle("gold",done>=GOLD); $("goldTag").hidden=done<GOLD;
   const gb=$("goldBar"); gb.style.width=(done/HABITS.length*100)+"%"; gb.classList.toggle("full",done>=GOLD);
@@ -539,7 +555,7 @@ $("today").onclick=()=>{cur=TODAY;render()};
 document.querySelector(".gridwrap").addEventListener("click",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k){cur=k;render();setView("today")}});
 
 const tip=$("tip");
-window.addEventListener("resize",()=>renderGrid());
+window.addEventListener("resize",()=>{renderGrid();renderDay()});
 document.addEventListener("pointermove",e=>{const t=e.target.dataset&&e.target.dataset.tip;
   if(t){tip.textContent=t;tip.hidden=false;const x=Math.min(e.clientX+12,innerWidth-tip.offsetWidth-8);tip.style.left=x+"px";tip.style.top=(e.clientY+14)+"px"}else tip.hidden=true});
 
@@ -562,6 +578,7 @@ const VIEWS={today:"Habits",food:"Food",trends:"Streaks & Trends"};
 let view="today";
 function setView(v){
   view=v;
+  document.querySelector(".wrap").classList.toggle("fill",v==="today");
   document.querySelectorAll(".view").forEach(el=>el.hidden=el.dataset.view!==v);
   $("viewName").textContent=VIEWS[v];
   $("datebar").hidden=v==="trends";
