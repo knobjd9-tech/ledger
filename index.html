@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1d6b52">
+<meta name="theme-color" content="#0b0b0d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ledger">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -15,23 +15,16 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <title>Daily Ledger</title>
 <style>
-/* Layout: a single working column — today's checklist first, food numbers beside it on wide screens, trends and the 8-week grid below. */
+/* Layout: one working column — checklist + workout first, food beside it on wide screens, trends and the 8-week grid below. Dark gym-app look. */
 :root{
-  --bg:#f3f5f2; --surface:#ffffff; --ink:#18221d; --muted:#5d6b63; --line:#dde3de;
-  --accent:#1d6b52; --accent-soft:#d6ebe2; --empty:#e7ece8;
-  --good:#1d7a4a; --warn:#b4540a; --bad:#b3261e;
+  --bg:#0b0b0d; --surface:#151518; --raised:#1c1d21; --ink:#f2f3f5; --muted:#9097a3; --line:#27282e;
+  --accent:#2f7bff; --accent-soft:#12254d; --on-accent:#ffffff; --empty:#202127;
+  --gold:#f5c542; --gold-deep:#a8761a; --gold-soft:#3a2e10; --good:#3ecf8e; --warn:#ffb020; --bad:#ff5a5f;
   --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
   --body:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#111714; --surface:#19211d; --ink:#e6ece8; --muted:#94a39a; --line:#2a3530;
-  --accent:#5cc49b; --accent-soft:#1f3a2f; --empty:#222c27;
-  --good:#5cc48a; --warn:#f0a15a; --bad:#f2837a; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#111714; --surface:#19211d; --ink:#e6ece8; --muted:#94a39a; --line:#2a3530;
-  --accent:#5cc49b; --accent-soft:#1f3a2f; --empty:#222c27;
-  --good:#5cc48a; --warn:#f0a15a; --bad:#f2837a; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
 .wrap{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:20px 48px;display:grid;gap:20px}
@@ -53,11 +46,11 @@ button{font:inherit;color:inherit;cursor:pointer}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;gap:14px;min-width:0}
 .phead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
 .habits{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-.habit{display:flex;align-items:center;gap:10px;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:48px}
+.habit{display:flex;align-items:center;gap:10px;text-align:left;background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:48px}
 .habit .box{flex:none;width:20px;height:20px;border-radius:5px;border:2px solid var(--muted);display:grid;place-items:center}
 .habit[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
 .habit[aria-pressed="true"] .box{background:var(--accent);border-color:var(--accent)}
-.habit[aria-pressed="true"] .box::after{content:"";width:9px;height:5px;border:2px solid var(--surface);border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+.habit[aria-pressed="true"] .box::after{content:"";width:9px;height:5px;border:2px solid var(--on-accent);border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
 .habit .name{font-weight:500;font-size:14px;line-height:1.2}
 .habit .auto{display:block;font-size:11px;color:var(--muted);font-weight:400}
 .score{font-family:var(--display);font-size:28px;font-weight:800}
@@ -91,8 +84,63 @@ table.grid td.st{padding-left:10px;white-space:nowrap;color:var(--muted);font-fa
 .setupcard{width:min(440px,100%)}
 .setupcard input{font:inherit;width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px}
 .setupcard p{margin:0}
-.primary{background:var(--accent);color:var(--surface);border:0;border-radius:8px;padding:11px;font-weight:600}
+.primary{background:var(--accent);color:var(--on-accent);border:0;border-radius:8px;padding:11px;font-weight:600}
 .err{color:var(--bad);font-size:13px;min-height:1em}
+.workout{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:14px}
+.worow{display:flex;gap:8px;flex-wrap:wrap}
+.worow select,.worow input{flex:1 1 180px;min-width:0;font:inherit;background:var(--raised);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 10px}
+.worow .primary{flex:none;padding:9px 18px}
+.wolist{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.wolist li{display:flex;align-items:center;gap:6px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:99px;padding:4px 6px 4px 12px;font-size:13px;font-weight:500}
+.wolist button{background:none;border:0;color:var(--muted);font-size:16px;line-height:1;padding:2px 6px;border-radius:99px}
+.wolist button:hover{color:var(--ink)}
+.worow select:focus-visible,.worow input:focus-visible,.primary:focus-visible,.wolist button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.hbar{display:grid;grid-template-columns:minmax(0,190px) minmax(0,1fr) 32px;gap:10px;align-items:center;font-size:13px}
+.hbar .t{height:12px;border-radius:0 4px 4px 0;background:var(--accent)}
+.hbars{display:grid;gap:8px}
+.empty{color:var(--muted);font-size:13px}
+.mgrid{display:grid;gap:10px}
+.mrow{display:grid;gap:4px}
+.mhead{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.mhead .st{color:var(--muted);font-family:var(--mono);font-size:12px;white-space:nowrap}
+.mcells{display:grid;gap:3px}
+.mcells .c{aspect-ratio:1;border-radius:3px;background:var(--empty);max-width:100%}
+.mcells .c.y{background:var(--accent)}
+.mcells .c.sel{outline:2px solid var(--ink)}
+.scorewrap{display:flex;align-items:center;gap:10px}
+.goldtag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#1a1305;background:linear-gradient(135deg,#fff4c2,var(--gold) 45%,var(--gold-deep));padding:4px 9px;border-radius:99px}
+.score.gold{color:var(--gold)}
+.goldmeter{position:relative;height:6px;border-radius:3px;background:var(--empty)}
+.goldmeter i{display:block;height:100%;border-radius:3px;background:var(--accent);width:0}
+.goldmeter i.full{background:linear-gradient(90deg,var(--gold-deep),var(--gold),#fff4c2)}
+.goldmark{position:absolute;top:-3px;bottom:-3px;left:66.67%;width:2px;background:var(--gold);border-radius:1px}
+.goldstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:520px){.goldstats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.goldstats>div{display:grid;gap:2px}
+.gnum{font-family:var(--display);font-size:30px;font-weight:800;color:var(--gold);line-height:1.1}
+.goldstrip{display:grid;grid-template-columns:repeat(30,1fr);gap:3px}
+.goldstrip i{aspect-ratio:1;border-radius:50%;background:var(--empty)}
+.goldstrip i.g{background:radial-gradient(circle at 35% 30%,#fff4c2,var(--gold) 45%,var(--gold-deep))}
+.goldstrip i.t{outline:2px solid var(--ink);outline-offset:1px}
+.mcells .c.gd,table.grid td.c.gd{background:var(--gold)}
+.celebrate{position:fixed;inset:0;z-index:10;display:grid;place-items:center;align-content:center;gap:18px;background:radial-gradient(circle at 50% 40%,rgba(70,50,8,.85),rgba(5,5,7,.97) 65%);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding-inline:16px;text-align:center}
+.celebrate canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.medal{width:min(52vw,220px);height:auto;filter:drop-shadow(0 12px 40px rgba(245,197,66,.45))}
+.celetitle{font-family:var(--display);font-weight:800;font-size:clamp(40px,11vw,64px);letter-spacing:-.01em;background:linear-gradient(180deg,#fff4c2,var(--gold) 55%,var(--gold-deep));-webkit-background-clip:text;background-clip:text;color:transparent}
+.celesub{color:var(--ink);opacity:.8;margin-top:2px}
+.celebtn{margin-top:18px;background:var(--gold);color:#1a1305;border:0;border-radius:99px;padding:11px 26px;font-weight:700}
+.celebtn:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.celetext{position:relative}
+@media (prefers-reduced-motion:no-preference){
+  .celebrate:not([hidden]) .medalwrap{animation:medalIn .9s cubic-bezier(.2,1.4,.4,1) both}
+  .celebrate:not([hidden]) .celetext{animation:fadeUp .6s .35s ease-out both}
+  .celebrate:not([hidden]) .shine{animation:shine 1.6s .7s ease-in-out 2}
+  .goldtag{animation:fadeUp .4s ease-out}
+}
+@keyframes medalIn{0%{transform:scale(.2) rotate(-25deg);opacity:0}100%{transform:none;opacity:1}}
+@keyframes fadeUp{0%{transform:translateY(12px);opacity:0}100%{transform:none;opacity:1}}
+@keyframes shine{0%{transform:rotate(20deg) translateX(0)}100%{transform:rotate(20deg) translateX(260px)}}
 </style>
 <style>
 html{-webkit-text-size-adjust:100%}
@@ -122,8 +170,19 @@ img{max-width:100%}[hidden]{display:none!important}
 
   <section class="top">
     <div class="panel">
-      <div class="phead"><h2>Checklist</h2><div><span class="score num" id="score">0/12</span></div></div>
+      <div class="phead"><h2>Checklist</h2><div class="scorewrap"><span class="goldtag" id="goldTag" hidden>Gold day</span><span class="score num" id="score">0/12</span></div></div>
+      <div class="goldmeter" aria-hidden="true"><i id="goldBar"></i><span class="goldmark"></span></div>
       <div class="habits" id="habits"></div>
+      <div class="workout">
+        <div class="phead"><span class="lbl">Workouts</span><span class="src" id="woHint">Adding one checks off Exercise</span></div>
+        <div class="worow">
+          <label for="woSel" class="sr">Workout</label>
+          <select id="woSel"></select>
+          <input id="woOther" type="text" placeholder="Workout name" hidden>
+          <button type="button" class="primary" id="woAdd">Add</button>
+        </div>
+        <ul class="wolist" id="woList"></ul>
+      </div>
     </div>
     <div class="panel">
       <div class="phead"><h2>Food</h2><span class="src" id="foodSrc">No Lose It data yet</span></div>
@@ -145,6 +204,17 @@ img{max-width:100%}[hidden]{display:none!important}
     </div>
   </section>
 
+  <section class="panel goldpanel">
+    <div class="phead"><h2>Gold Days</h2><span class="src">8 or more of 12 habits in a day</span></div>
+    <div class="goldstats">
+      <div><span class="lbl">This month</span><span class="gnum num" id="gMonth">0</span></div>
+      <div><span class="lbl">Current streak</span><span class="gnum num" id="gStreak">0</span></div>
+      <div><span class="lbl">Best streak</span><span class="gnum num" id="gBest">0</span></div>
+      <div><span class="lbl">All time</span><span class="gnum num" id="gAll">0</span></div>
+    </div>
+    <div class="goldstrip" id="goldStrip"></div>
+  </section>
+
   <section class="charts">
     <div class="panel">
       <div class="phead"><h2>Calories, last 30 days</h2><span class="src">line = budget</span></div>
@@ -157,19 +227,48 @@ img{max-width:100%}[hidden]{display:none!important}
   </section>
 
   <section class="panel">
-    <div class="phead"><h2>Last 8 weeks</h2><span class="src">streak · 30-day rate</span></div>
-    <div class="gridwrap"><table class="grid" id="grid"></table></div>
+    <div class="phead"><h2>Workouts, last 30 days</h2><span class="src num" id="woTotal"></span></div>
+    <div id="woChart"></div>
+  </section>
+
+  <section class="panel">
+    <div class="phead"><h2 id="gridTitle">Last 8 weeks</h2><span class="src">streak · 30-day rate</span></div>
+    <div class="gridwrap"></div>
   </section>
 </div>
 <div class="tip" id="tip" hidden></div>
 
 
+<div class="celebrate" id="celebrate" hidden role="dialog" aria-label="Gold day">
+  <canvas id="confetti"></canvas>
+  <div class="medalwrap">
+    <svg class="medal" viewBox="0 0 200 260" aria-hidden="true">
+      <defs>
+        <radialGradient id="gG" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#fff4c2"/><stop offset=".35" stop-color="#f5c542"/><stop offset=".75" stop-color="#c8911f"/><stop offset="1" stop-color="#8a5d10"/></radialGradient>
+        <linearGradient id="gR" x1="0" x2="1"><stop offset="0" stop-color="#1f5fd6"/><stop offset="1" stop-color="#2f7bff"/></linearGradient>
+        <clipPath id="gC"><circle cx="100" cy="160" r="72"/></clipPath>
+      </defs>
+      <path d="M58 0h34l18 70-30 18z" fill="url(#gR)"/><path d="M142 0h-34l-18 70 30 18z" fill="#1a4fb3"/>
+      <circle cx="100" cy="160" r="80" fill="#8a5d10"/>
+      <circle cx="100" cy="160" r="74" fill="url(#gG)"/>
+      <circle cx="100" cy="160" r="60" fill="none" stroke="#fff4c2" stroke-opacity=".55" stroke-width="2"/>
+      <path d="M100 112l13.5 27.4 30.2 4.4-21.9 21.3 5.2 30.1L100 181l-27 14.2 5.2-30.1-21.9-21.3 30.2-4.4z" fill="#fff4c2" stroke="#8a5d10" stroke-width="3" stroke-linejoin="round"/>
+      <g clip-path="url(#gC)"><rect class="shine" x="-60" y="80" width="40" height="170" fill="#fff" opacity=".45" transform="rotate(20 100 160)"/></g>
+    </svg>
+  </div>
+  <div class="celetext">
+    <div class="celetitle">Gold Day</div>
+    <div class="celesub num" id="celeSub">8 of 12 habits</div>
+    <button type="button" class="celebtn" id="celeClose">Keep going</button>
+  </div>
+</div>
+
 <div class="setup" id="setup" hidden>
-  <form class="panel setupcard" id="setupForm">
+  <form class="panel setupcard" id="setupForm" novalidate>
     <h2>Connect your data</h2>
     <p class="src">Paste the Web app link from your Google Apps Script deployment and your passcode. You only do this once on each device.</p>
     <label for="setupUrl" class="lbl">Web app link</label>
-    <input id="setupUrl" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
+    <input id="setupUrl" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
     <label for="setupKey" class="lbl">Passcode</label>
     <input id="setupKey" type="text" autocomplete="off" autocapitalize="characters" placeholder="XXXX-XXXX-XXXX">
     <div class="err" id="setupErr"></div>
@@ -189,6 +288,7 @@ const key=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const fromKey=k=>{const[a,b,c]=k.split("-").map(Number);return new Date(a,b-1,c)};
 const addDays=(k,n)=>{const d=fromKey(k);d.setDate(d.getDate()+n);return key(d)};
 let TODAY=key(new Date());
+const WORKOUTS=["Core Power Yoga C2","Core Power Yoga Sculpt","Liift 4 Shoulders","Liift 4 Back and Biceps","Liift 4 Legs","Liift 4 Chest and Tris","Peloton 12/3/30","Golf"];
 let cur=TODAY, days={}, settings={calorieBudget:null,proteinGoal:null}, readOnly=false;
 
 function budgetFor(d){return (d&&d.calorieBudget)||settings.calorieBudget}
@@ -208,6 +308,43 @@ function streak(h){
   return n;
 }
 function rate(h){let n=0;for(let i=0;i<30;i++) if(isDone(addDays(TODAY,-i),h)) n++;return Math.round(n/30*100)}
+const GOLD=8;
+function doneCount(k){return HABITS.filter(([id])=>isDone(k,id)).length}
+const isGold=k=>doneCount(k)>=GOLD;
+function goldStats(){
+  const keys=Object.keys(days).sort(); const month=TODAY.slice(0,7);
+  let all=0,monthN=0,best=0,run=0,prev=null;
+  keys.forEach(k=>{ if(!isGold(k)) return; all++; if(k.startsWith(month)) monthN++;
+    run=(prev&&addDays(prev,1)===k)?run+1:1; prev=k; best=Math.max(best,run); });
+  let k=TODAY,cur_=0; if(!isGold(k)) k=addDays(k,-1); while(isGold(k)){cur_++;k=addDays(k,-1)}
+  return {all,monthN,best,cur:cur_};
+}
+function renderGold(){
+  const g=goldStats();
+  $("gMonth").textContent=g.monthN; $("gStreak").textContent=g.cur; $("gBest").textContent=g.best; $("gAll").textContent=g.all;
+  let h=""; for(let i=29;i>=0;i--){const k=addDays(TODAY,-i);
+    h+=`<i class="${isGold(k)?"g":""}${k===cur?" t":""}" data-k="${k}" data-tip="${fromKey(k).toLocaleDateString(undefined,{month:"short",day:"numeric"})}: ${doneCount(k)}/12${isGold(k)?" · Gold":""}"></i>`}
+  $("goldStrip").innerHTML=h;
+}
+let confettiRaf=0;
+function celebrate(n){
+  $("celeSub").textContent=n+" of 12 habits · "+fromKey(cur).toLocaleDateString(undefined,{weekday:"long"});
+  const ov=$("celebrate"); ov.hidden=false; $("celeClose").focus();
+  try{navigator.vibrate&&navigator.vibrate([30,40,60])}catch(e){}
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const c=$("confetti"), x=c.getContext("2d"), dpr=devicePixelRatio||1;
+  c.width=innerWidth*dpr; c.height=innerHeight*dpr; x.scale(dpr,dpr);
+  const cols=["#fff4c2","#f5c542","#e0a92e","#a8761a","#2f7bff"];
+  const ps=Array.from({length:140},()=>({x:innerWidth/2,y:innerHeight*.38,vx:(Math.random()-.5)*14,vy:-Math.random()*14-4,
+    s:4+Math.random()*6,r:Math.random()*6,vr:(Math.random()-.5)*.3,c:cols[Math.random()*cols.length|0]}));
+  const t0=performance.now(); cancelAnimationFrame(confettiRaf);
+  (function f(t){ x.clearRect(0,0,innerWidth,innerHeight);
+    ps.forEach(p=>{p.vy+=.32;p.vx*=.99;p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;
+      x.save();x.translate(p.x,p.y);x.rotate(p.r);x.fillStyle=p.c;x.fillRect(-p.s/2,-p.s/4,p.s,p.s/2);x.restore()});
+    if(t-t0<3200&&!ov.hidden) confettiRaf=requestAnimationFrame(f); else x.clearRect(0,0,innerWidth,innerHeight);
+  })(t0);
+}
+
 
 function renderDay(){
   const d=days[cur]||{};
@@ -228,6 +365,15 @@ function renderDay(){
     hb.appendChild(b);
   }
   $("score").textContent=done+"/"+HABITS.length;
+  $("score").classList.toggle("gold",done>=GOLD); $("goldTag").hidden=done<GOLD;
+  const gb=$("goldBar"); gb.style.width=(done/HABITS.length*100)+"%"; gb.classList.toggle("full",done>=GOLD);
+  const wl=$("woList"); wl.textContent="";
+  (d.workouts||[]).forEach((w,i)=>{
+    const li=document.createElement("li"); li.textContent=w;
+    const x=document.createElement("button"); x.type="button"; x.setAttribute("aria-label","Remove "+w); x.textContent="×";
+    x.onclick=()=>{const arr=(days[cur].workouts||[]).slice(); arr.splice(i,1); saveDay({workouts:arr})};
+    li.appendChild(x); wl.appendChild(li);
+  });
   const bud=budgetFor(d), goal=goalFor(d);
   const cal=d.calories, pro=d.protein;
   $("calTxt").textContent=(cal!=null?cal.toLocaleString():"–")+" / "+(bud?bud.toLocaleString():"–");
@@ -263,24 +409,53 @@ function barChart(el,field,refFn,unit){
 }
 
 function renderGrid(){
-  const n=56, ks=[];for(let i=n-1;i>=0;i--) ks.push(addDays(TODAY,-i));
-  let h="<thead><tr><th></th>";
+  const phone=innerWidth<640, n=phone?21:56, ks=[];
+  for(let i=n-1;i>=0;i--) ks.push(addDays(TODAY,-i));
+  $("gridTitle").textContent="Last "+(n/7)+" weeks";
+  const cell=(k,id,name)=>`${isDone(k,id)?" y":""}${k===cur?" sel":""}" data-k="${k}" data-tip="${name} · ${fromKey(k).toLocaleDateString(undefined,{month:"short",day:"numeric"})}: ${isDone(k,id)?"done":"not done"}"`;
+  const gw=document.querySelector(".gridwrap");
+  if(phone){
+    let h='<div class="mgrid">'+`<div class="mrow"><div class="mhead"><span style="color:var(--gold);font-weight:600">Gold day</span><span class="st">${goldStats().cur}d streak</span></div><div class="mcells" style="grid-template-columns:repeat(${n},1fr)">`+ks.map(k=>`<div class="c${isGold(k)?" gd":""}${k===cur?" sel":""}" data-k="${k}" data-tip="${doneCount(k)}/12"></div>`).join('')+'</div></div>';
+    for(const [id,name] of HABITS){
+      h+=`<div class="mrow"><div class="mhead"><span>${name}</span><span class="st">${streak(id)}d · ${rate(id)}%</span></div><div class="mcells" style="grid-template-columns:repeat(${n},1fr)">`;
+      ks.forEach(k=>{h+=`<div class="c${cell(k,id,name)}></div>`});
+      h+="</div></div>";
+    }
+    gw.innerHTML=h+"</div>";
+    return;
+  }
+  let h='<table class="grid"><thead><tr><th></th>';
   ks.forEach((k,i)=>{h+=`<th style="font-size:10px;color:var(--muted);font-weight:400;padding:0">${i%7===0?fromKey(k).getDate():""}</th>`});
   h+="<th></th></tr></thead><tbody>";
+  h+=`<tr><th scope="row" style="color:var(--gold);font-weight:600">Gold day</th>`+ks.map(k=>`<td class="c${isGold(k)?" gd":""}${k===cur?" sel":""}" data-k="${k}" data-tip="${doneCount(k)}/12"></td>`).join("")+`<td class="st">${goldStats().cur}d streak</td></tr>`;
   for(const [id,name] of HABITS){
     h+=`<tr><th scope="row">${name}</th>`;
-    ks.forEach(k=>{h+=`<td class="c${isDone(k,id)?" y":""}${k===cur?" sel":""}" data-k="${k}" data-tip="${name} · ${fromKey(k).toLocaleDateString(undefined,{month:"short",day:"numeric"})}: ${isDone(k,id)?"done":"not done"}"></td>`});
+    ks.forEach(k=>{h+=`<td class="c${cell(k,id,name)}></td>`});
     h+=`<td class="st">${streak(id)}d · ${rate(id)}%</td></tr>`;
   }
-  $("grid").innerHTML=h+"</tbody>";
-  const gw=document.querySelector(".gridwrap"); gw.scrollLeft=gw.scrollWidth;
+  gw.innerHTML=h+"</tbody></table>";
+  gw.scrollLeft=gw.scrollWidth;
 }
 
-function render(){renderDay();barChart("calChart","calories",budgetFor," cal");barChart("proChart","protein",goalFor,"g");renderGrid()}
+function renderWorkouts(){
+  const counts={}; let total=0;
+  for(let i=0;i<30;i++){const d=days[addDays(TODAY,-i)]; (d&&d.workouts||[]).forEach(w=>{counts[w]=(counts[w]||0)+1;total++})}
+  $("woTotal").textContent=total?total+" sessions":"";
+  const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const el=$("woChart");
+  if(!rows.length){el.innerHTML='<div class="empty">No workouts logged in the last 30 days. Pick one under the checklist to start.</div>';return}
+  const max=rows[0][1];
+  el.innerHTML='<div class="hbars">'+rows.map(([w,n])=>'<div class="hbar"><span></span><div class="t" style="width:'+(n/max*100)+'%"></div><span class="num">'+n+'</span></div>').join("")+'</div>';
+  el.querySelectorAll(".hbar span:first-child").forEach((s,i)=>s.textContent=rows[i][0]);
+}
+function render(){renderDay();renderGold();renderWorkouts();barChart("calChart","calories",budgetFor," cal");barChart("proChart","protein",goalFor,"g");renderGrid()}
 
 async function saveDay(patch){
+  const before=doneCount(cur);
   days[cur]=Object.assign({},days[cur]||{},patch,{habits:Object.assign({},(days[cur]||{}).habits||{},patch.habits||{})});
   render();
+  const after=doneCount(cur);
+  if(before<GOLD&&after>=GOLD) celebrate(after);
   cache();
   const hb={};Object.entries(patch.habits||{}).forEach(([k,v])=>hb[k]=v);
   const p=Object.assign({},patch,{habits:hb});
@@ -308,15 +483,33 @@ function numInput(el,field,target){
 numInput("calIn","calories","day");numInput("proIn","protein","day");
 numInput("budIn","calorieBudget","settings");numInput("goalIn","proteinGoal","settings");
 
+$("celeClose").onclick=()=>{$("celebrate").hidden=true};
+$("celebrate").addEventListener("click",e=>{if(e.target.id==="celebrate")$("celebrate").hidden=true});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")$("celebrate").hidden=true});
+$("goldStrip").addEventListener("click",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k){cur=k;render();window.scrollTo({top:0,behavior:"smooth"})}});
 $("prev").onclick=()=>{cur=addDays(cur,-1);render()};
 $("next").onclick=()=>{if(cur<TODAY){cur=addDays(cur,1);render()}};
 $("today").onclick=()=>{cur=TODAY;render()};
-$("grid").addEventListener("click",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k){cur=k;render();window.scrollTo({top:0,behavior:"smooth"})}});
+document.querySelector(".gridwrap").addEventListener("click",e=>{const k=e.target.dataset&&e.target.dataset.k;if(k){cur=k;render();window.scrollTo({top:0,behavior:"smooth"})}});
 
 const tip=$("tip");
+window.addEventListener("resize",()=>renderGrid());
 document.addEventListener("pointermove",e=>{const t=e.target.dataset&&e.target.dataset.tip;
   if(t){tip.textContent=t;tip.hidden=false;const x=Math.min(e.clientX+12,innerWidth-tip.offsetWidth-8);tip.style.left=x+"px";tip.style.top=(e.clientY+14)+"px"}else tip.hidden=true});
 
+
+const sel=$("woSel");
+sel.innerHTML='<option value="">Choose a workout…</option>'+WORKOUTS.map(w=>'<option></option>').join("")+'<option value="__other">Other…</option>';
+WORKOUTS.forEach((w,i)=>{sel.options[i+1].textContent=w;sel.options[i+1].value=w});
+sel.onchange=()=>{$("woOther").hidden=sel.value!=="__other"; if(sel.value==="__other") $("woOther").focus()};
+$("woAdd").onclick=()=>{
+  let w=sel.value==="__other"?$("woOther").value.trim():sel.value;
+  w=w.replace(/\|/g,"/");
+  if(!w){sel.focus();return}
+  const arr=((days[cur]||{}).workouts||[]).concat([w]);
+  saveDay({workouts:arr,habits:{exercise:true}});
+  sel.value="";$("woOther").value="";$("woOther").hidden=true;
+};
 
 /* ---------- storage: Google Sheet via Apps Script ---------- */
 const LS="ledger.v1";
@@ -352,8 +545,11 @@ async function load(){
 function showSetup(){$("setup").hidden=false;$("setupUrl").value=conn?conn.url:"";}
 $("setupForm").addEventListener("submit",e=>{
   e.preventDefault();
-  const url=$("setupUrl").value.trim(), key=$("setupKey").value.trim().toUpperCase();
-  if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)){$("setupErr").textContent="That link should start with https://script.google.com/";return}
+  const raw=$("setupUrl").value.replace(/[\u200B-\u200D\uFEFF\s<>"']/g,"");
+  const m=raw.match(/https?:\/\/script\.google(?:usercontent)?\.com\/[^\s]*?\/exec/i);
+  const key=$("setupKey").value.replace(/[^A-Za-z0-9-]/g,"").toUpperCase();
+  if(!m){$("setupErr").textContent="Couldn't find your web app link. It contains script.google.com and ends with /exec.";return}
+  const url=m[0].replace(/^http:/i,"https:").replace(/^https/i,"https").replace(/script\.google/i,"script.google");
   if(!key){$("setupErr").textContent="Enter the passcode.";return}
   conn={url,key};lsSet(LS+".conn",conn);$("setup").hidden=true;$("setupErr").textContent="";load();
 });
