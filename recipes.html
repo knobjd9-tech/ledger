@@ -360,12 +360,27 @@ async function post(body){
   const r=await fetch(API.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({key:API.key},body))});
   return r.json();
 }
-const queue=[];let busy=false;
-function enqueue(req){queue.push(req);$("status").textContent="Saving…";flush()}
+// Unsaved changes are kept on this device until the Sheet confirms them, even if the app is closed.
+const QK=LS+".queue";
+const queue=lsGet(QK)||[];let busy=false,fails=0;
+const saveQ=()=>lsSet(QK,queue);
+function enqueue(req){
+  if(req.action==="saveRecipe"||req.action==="saveGrocery"){ // only the newest copy of the same thing needs sending
+    for(let i=queue.length-1;i>=0;i--){const q=queue[i];if(q.action===req.action&&(req.action==="saveGrocery"||q.recipe.id===req.recipe.id))queue.splice(i,1)}
+  }
+  queue.push(req);saveQ();$("status").textContent="Saving…";flush()}
 async function flush(){
   if(busy||!queue.length) return; busy=true;
-  try{const j=await post(queue[0]); if(j.error&&j.error!=="bad_request") throw new Error(j.error); queue.shift(); $("status").textContent=queue.length?"Saving…":"Saved"}
-  catch(e){$("status").textContent="Offline. Will retry…";busy=false;setTimeout(flush,5000);return}
+  let j;
+  try{j=await post(queue[0])}
+  catch(e){$("status").textContent="Offline. Your changes are saved on this device and will sync.";busy=false;setTimeout(flush,8000);return}
+  if(j.error&&j.error!=="bad_request"){
+    fails++;
+    if(fails<3){busy=false;setTimeout(flush,4000);return}
+    const what=queue[0].recipe?`“${queue[0].recipe.title}”`:"your change";
+    toast(`Couldn't save ${what} to your Sheet: ${j.message||j.error}`);
+  }
+  fails=0; queue.shift(); saveQ(); $("status").textContent=queue.length?"Saving…":"Saved";
   busy=false;flush();
 }
 async function load(){
@@ -373,8 +388,10 @@ async function load(){
   try{
     const r=await fetch(API.url+"?action=recipes&key="+encodeURIComponent(API.key)); const j=await r.json();
     if(j.error) throw new Error(j.error);
-    if(queue.length) return;
-    recipes=j.recipes||[]; grocery=j.grocery||[]; aiReady=!!j.aiReady; lsSet(LS+".ai",aiReady); cache(); renderAll(); renderAi();
+    recipes=j.recipes||[];
+    queue.forEach(q=>{if(q.action==="saveRecipe"){const i=recipes.findIndex(r=>r.id===q.recipe.id);if(i>=0)recipes[i]=q.recipe;else recipes.unshift(q.recipe)}
+      if(q.action==="deleteRecipe")recipes=recipes.filter(r=>r.id!==q.id);
+      if(q.action==="saveGrocery")j.grocery=q.items}); grocery=j.grocery||[]; aiReady=!!j.aiReady; lsSet(LS+".ai",aiReady); cache(); renderAll(); renderAi();
     $("status").textContent="Synced "+new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
   }catch(e){$("status").textContent=String(e.message).includes("bad_request")?"Update your Apps Script to turn on recipes.":"Offline. Showing saved copy."}
 }
@@ -597,7 +614,7 @@ function frameOf(file){return new Promise(res=>{
   try{const v=document.createElement("video");v.muted=true;v.playsInline=true;v.preload="auto";v.src=URL.createObjectURL(file);
     const done=x=>{try{URL.revokeObjectURL(v.src)}catch(e){}res(x)};
     v.onloadeddata=()=>{try{v.currentTime=Math.min(1.5,(v.duration||2)/3)}catch(e){done("")}};
-    v.onseeked=()=>{try{const w=360,h=Math.round(w*v.videoHeight/v.videoWidth)||480;const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(v,0,0,w,h);done(c.toDataURL("image/jpeg",.6))}catch(e){done("")}};
+    v.onseeked=()=>{try{const w=320,h=Math.round(w*v.videoHeight/v.videoWidth)||480;const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(v,0,0,w,h);done(c.toDataURL("image/jpeg",.55))}catch(e){done("")}};
     v.onerror=()=>done(""); setTimeout(()=>done(""),6000);
   }catch(e){res("")}})}
 async function pickVideo(input,merge){
@@ -817,7 +834,7 @@ document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;closeMenu();
 document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"){load();if(!$("cook").hidden&&!wake){try{wake=await navigator.wakeLock.request("screen")}catch(e){}}}});
 
 function renderAll(){renderList();renderGrocery();if(openId&&!$("detail").hidden)renderDetail()}
-setView("list"); renderAll(); load();
+setView("list"); renderAll(); load(); if(queue.length) flush();
 </script>
 </body>
 </html>
