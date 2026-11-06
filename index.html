@@ -39,7 +39,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .nav{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 12px}
 .nav:disabled{opacity:.4;cursor:default}
 .nav:focus-visible,.habit:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#dateLabel{min-width:150px;text-align:center;font-weight:600}
+#dateLabel{text-align:center;font-weight:600}
 .status{font-size:13px;color:var(--muted)}
 .top{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:20px}
 @media (max-width:760px){.top{grid-template-columns:minmax(0,1fr)}}
@@ -190,6 +190,32 @@ table.grid td.st{padding-left:10px;white-space:nowrap;color:var(--muted);font-fa
   .wrap.fill .checkpanel .habits{grid-auto-rows:minmax(38px,1fr)}
   .checkpanel .goldmeter{height:5px}
 }
+.calwrap{position:static}
+.datebar{position:relative}
+.datebtn svg,.viewbtn svg{width:10px;height:7px;flex:none}
+.datebtn #dateLabel{white-space:nowrap}
+.datebtn{display:flex;align-items:center;justify-content:center;gap:7px;min-width:150px;background:none;border:1px solid transparent;border-radius:8px;padding:6px 10px}
+.datebtn:hover,.datebtn[aria-expanded="true"]{border-color:var(--line);background:var(--raised)}
+.datebtn:focus-visible,.calnav:focus-visible,.calgrid button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cal{position:absolute;left:50%;transform:translateX(-50%);top:calc(100% + 8px);z-index:7;width:min(320px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;display:grid;gap:8px;box-shadow:0 18px 48px rgba(0,0,0,.6)}
+.calhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.calmonth{font-family:var(--display);font-weight:600;font-size:16px}
+.calnav{background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:5px 11px}
+.calnav:disabled{opacity:.35;cursor:default}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.calwk span{text-align:center;font-size:11px;color:var(--muted);font-weight:600}
+.calgrid button{position:relative;aspect-ratio:1;border:0;border-radius:9px;background:none;font-family:var(--mono);font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums}
+.calgrid button:hover:not(:disabled){background:var(--raised)}
+.calgrid button:disabled{color:var(--line);cursor:default}
+.calgrid button.today{box-shadow:inset 0 0 0 1.5px var(--muted)}
+.calgrid button.sel{background:var(--accent);color:var(--on-accent);font-weight:600}
+.calgrid button.logged::after,.calgrid button.gold::after{content:"";position:absolute;left:50%;bottom:4px;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:var(--accent)}
+.calgrid button.gold::after{background:var(--gold)}
+.calgrid button.sel.logged::after{background:var(--on-accent)}
+.calkey{display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--muted)}
+.calkey span{display:flex;align-items:center;gap:5px}
+.calkey .k{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.calkey .k.gold{background:var(--gold)}
 </style>
 <style>
 html{-webkit-text-size-adjust:100%}
@@ -215,7 +241,19 @@ img{max-width:100%}[hidden]{display:none!important}
   <div class="datebar" id="datebar">
     <div class="datenav">
       <button class="nav" id="prev" aria-label="Previous day">&larr;</button>
-      <div id="dateLabel" class="num">&nbsp;</div>
+      <div class="calwrap">
+        <button type="button" class="datebtn" id="dateBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="cal"><span id="dateLabel" class="num">&nbsp;</span><svg viewBox="0 0 12 8" width="10" height="7" aria-hidden="true"><path d="M1 1.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="cal" id="cal" role="dialog" aria-label="Pick a day" hidden>
+          <div class="calhead">
+            <button type="button" class="calnav" id="calPrev" aria-label="Previous month">&larr;</button>
+            <div class="calmonth" id="calMonth"></div>
+            <button type="button" class="calnav" id="calNext" aria-label="Next month">&rarr;</button>
+          </div>
+          <div class="calgrid calwk"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+          <div class="calgrid" id="calDays"></div>
+          <div class="calkey"><span><i class="k gold"></i>Gold Day</span><span><i class="k logged"></i>Logged</span></div>
+        </div>
+      </div>
       <button class="nav" id="next" aria-label="Next day">&rarr;</button>
       <button class="nav" id="today">Today</button>
     </div>
@@ -572,6 +610,31 @@ $("woAdd").onclick=()=>{
   saveDay({workouts:arr,habits:{exercise:true}});
   sel.value="";$("woOther").value="";$("woOther").hidden=true;
 };
+
+/* ---------- calendar picker ---------- */
+let calY, calM;
+function hasLog(k){const d=days[k]; if(!d) return false; return (d.workouts&&d.workouts.length)||d.calories!=null||Object.values(d.habits||{}).some(v=>v===true)}
+function renderCal(){
+  const first=new Date(calY,calM,1), n=new Date(calY,calM+1,0).getDate();
+  $("calMonth").textContent=first.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  const now=fromKey(TODAY); $("calNext").disabled=calY>now.getFullYear()||(calY===now.getFullYear()&&calM>=now.getMonth());
+  let h=""; for(let i=0;i<first.getDay();i++) h+="<span></span>";
+  for(let d=1;d<=n;d++){
+    const k=calY+"-"+pad(calM+1)+"-"+pad(d), fut=k>TODAY;
+    const cls=[k===cur?"sel":"",k===TODAY?"today":"",!fut&&isGold(k)?"gold":(!fut&&hasLog(k)?"logged":"")].join(" ").trim();
+    h+=`<button type="button" class="${cls}" data-k="${k}" ${fut?"disabled":""} aria-label="${fromKey(k).toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"})}${isGold(k)?", Gold Day":""}">${d}</button>`;
+  }
+  $("calDays").innerHTML=h;
+}
+function openCal(){const d=fromKey(cur);calY=d.getFullYear();calM=d.getMonth();renderCal();$("cal").hidden=false;$("dateBtn").setAttribute("aria-expanded","true");$("calDays").querySelector(".sel")?.focus()}
+function closeCal(){$("cal").hidden=true;$("dateBtn").setAttribute("aria-expanded","false")}
+$("dateBtn").onclick=e=>{e.stopPropagation();$("cal").hidden?openCal():closeCal()};
+$("calPrev").onclick=e=>{e.stopPropagation();if(--calM<0){calM=11;calY--}renderCal()};
+$("calNext").onclick=e=>{e.stopPropagation();if(++calM>11){calM=0;calY++}renderCal()};
+$("calDays").addEventListener("click",e=>{const b=e.target.closest("button[data-k]");if(b&&!b.disabled){cur=b.dataset.k;closeCal();render()}});
+$("cal").addEventListener("click",e=>e.stopPropagation());
+document.addEventListener("click",()=>{if(!$("cal").hidden)closeCal()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeCal()});
 
 /* ---------- screens ---------- */
 const VIEWS={today:"Habits",food:"Food",trends:"Streaks & Trends"};
