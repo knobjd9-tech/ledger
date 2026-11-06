@@ -148,6 +148,13 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .seg button{background:none;border:0;border-radius:99px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--muted)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
 .ings .alt{color:var(--muted);font-size:.92em}
+.swipe{position:relative;border-radius:12px;overflow:hidden;min-width:0;touch-action:pan-y}
+.swipe .card{position:relative;z-index:1;width:100%;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.swdel{position:absolute;inset:0 0 0 auto;width:110px;background:var(--bad);color:#fff;border:0;font-weight:700;padding-left:18px;display:flex;align-items:center;justify-content:center;visibility:hidden}
+.swipe.open .swdel,.swipe:has(.card[style*="translateX"]) .swdel{visibility:visible}
+.toast{display:flex;align-items:center;gap:12px;width:max-content}
+.toastbtn{background:none;border:0;color:#1550c8;font-weight:700;padding:2px 4px}
+.cards .swipe .card{border-radius:12px}
 </style>
 </head>
 <body>
@@ -291,7 +298,9 @@ const cached=lsGet(LS); if(cached){recipes=cached.recipes||[];grocery=cached.gro
 const cache=()=>lsSet(LS,{recipes,grocery});
 
 let toastT;
-function toast(msg){const t=$("toast");t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3200)}
+function toast(msg,action,fn){const t=$("toast");t.textContent=msg;
+  if(action){const b=document.createElement("button");b.type="button";b.className="toastbtn";b.textContent=action;b.onclick=()=>{t.hidden=true;fn()};t.appendChild(b)}
+  t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,action?5000:3200)}
 
 /* ---------- server ---------- */
 async function post(body){
@@ -424,11 +433,47 @@ function renderList(){
   const el=$("cards");
   if(!recipes.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><b>No recipes yet</b><span>Paste a recipe link above and tap Import. Most recipe sites come in with photo, ingredients, steps and often calories and protein.</span></div>';return}
   if(!list.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><b>No matches</b><span>Try another word or tag.</span></div>';return}
-  el.innerHTML=list.map(r=>`<button type="button" class="card" data-id="${esc(r.id)}">${thumb(r,"thumb")}<div class="cbody"><div class="ctitle">${r.fav?'<span class="star">★</span> ':""}${esc(r.title)}</div><div class="meta">${cardMeta(r)}</div></div></button>`).join("");
+  el.innerHTML=list.map(r=>`<div class="swipe" data-id="${esc(r.id)}"><button type="button" class="swdel" data-del="${esc(r.id)}" tabindex="-1" aria-label="Delete ${esc(r.title)}">Delete</button><button type="button" class="card" data-id="${esc(r.id)}">${thumb(r,"thumb")}<div class="cbody"><div class="ctitle">${r.fav?'<span class="star">★</span> ':""}${esc(r.title)}</div><div class="meta">${cardMeta(r)}</div></div></button></div>`).join("");
 }
 $("tagChips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(b){filterTag=b.dataset.t;renderList()}});
 $("search").addEventListener("input",e=>{query=e.target.value.trim();renderList()});
-$("cards").addEventListener("click",e=>{const c=e.target.closest(".card");if(c)openDetail(c.dataset.id)});
+/* swipe a card left to reveal Delete */
+const OPEN=-92; let sw=null, openSwipe=null, swiped=false;
+function setX(card,x,anim){card.style.transition=anim?"transform .2s ease":"none";card.style.transform=x?`translateX(${x}px)`:"";card.parentElement.classList.toggle("open",x<0)}
+function closeSwipe(){if(openSwipe){setX(openSwipe,0,true);openSwipe=null}}
+$("cards").addEventListener("pointerdown",e=>{const c=e.target.closest(".card");if(!c)return;
+  if(openSwipe&&openSwipe!==c)closeSwipe();
+  sw={card:c,x0:e.clientX,y0:e.clientY,base:c===openSwipe?OPEN:0,dir:null,id:e.pointerId};swiped=false});
+$("cards").addEventListener("pointermove",e=>{if(!sw||e.pointerId!==sw.id)return;
+  const dx=e.clientX-sw.x0, dy=e.clientY-sw.y0;
+  if(!sw.dir){if(Math.abs(dx)<8&&Math.abs(dy)<8)return; sw.dir=Math.abs(dx)>Math.abs(dy)?"h":"v"; if(sw.dir==="h"){try{sw.card.setPointerCapture(e.pointerId)}catch(_){}}}
+  if(sw.dir!=="h")return; swiped=true;
+  setX(sw.card,Math.max(OPEN-30,Math.min(0,sw.base+dx)),false)});
+function endSwipe(e){if(!sw||e.pointerId!==sw.id)return;
+  if(sw.dir==="h"){const m=new DOMMatrix(getComputedStyle(sw.card).transform).m41; if(m<OPEN/2){setX(sw.card,OPEN,true);openSwipe=sw.card}else{setX(sw.card,0,true);if(openSwipe===sw.card)openSwipe=null}}
+  sw=null}
+$("cards").addEventListener("pointerup",endSwipe);
+$("cards").addEventListener("pointercancel",endSwipe);
+$("cards").addEventListener("click",e=>{
+  const d=e.target.closest(".swdel"); if(d){deleteWithUndo(d.dataset.del);return}
+  const c=e.target.closest(".card"); if(!c)return;
+  if(swiped){swiped=false;return}
+  if(openSwipe){closeSwipe();return}
+  openDetail(c.dataset.id)});
+document.addEventListener("pointerdown",e=>{if(openSwipe&&!e.target.closest(".swipe"))closeSwipe()});
+
+/* delete with a few seconds to undo */
+let pendingDel=null;
+function deleteWithUndo(id){
+  commitDelete();
+  const i=recipes.findIndex(r=>r.id===id); if(i<0)return;
+  const rec=recipes[i]; recipes.splice(i,1); openSwipe=null; cache(); renderList();
+  if(!$("detail").hidden&&openId===id){$("detail").hidden=true;openId=null}
+  pendingDel={rec,i,t:setTimeout(commitDelete,5000)};
+  toast(`Deleted “${rec.title}”.`,"Undo",()=>{clearTimeout(pendingDel.t);recipes.splice(Math.min(pendingDel.i,recipes.length),0,pendingDel.rec);pendingDel=null;cache();renderList()});
+}
+function commitDelete(){if(!pendingDel)return;clearTimeout(pendingDel.t);enqueue({action:"deleteRecipe",id:pendingDel.rec.id});pendingDel=null}
+window.addEventListener("pagehide",commitDelete);
 
 /* ---------- import ---------- */
 $("importForm").addEventListener("submit",async e=>{
@@ -526,7 +571,7 @@ function openEdit(r,isNew){
   $("eNotice").innerHTML=note;
   $("eDelete").innerHTML=isNew?"":'<button type="button" class="btn danger" id="eDel">Delete recipe</button><span id="eDelConfirm" hidden class="row" style="margin-top:8px"><span class="src">Delete this recipe for good?</span><button type="button" class="btn danger" id="eDelYes">Delete</button><button type="button" class="btn" id="eDelNo">Keep</button></span>';
   if(!isNew){$("eDel").onclick=()=>{$("eDelConfirm").hidden=false};$("eDelNo").onclick=()=>{$("eDelConfirm").hidden=true};
-    $("eDelYes").onclick=()=>{recipes=recipes.filter(x=>x.id!==draft.id);cache();enqueue({action:"deleteRecipe",id:draft.id});$("edit").hidden=true;$("detail").hidden=true;openId=null;renderList();toast("Recipe deleted.")}}
+    $("eDelYes").onclick=()=>{const id=draft.id;$("edit").hidden=true;draft=null;deleteWithUndo(id)}}
   renderTagEdit(); $("edit").hidden=false; $("edit").scrollTop=0;
 }
 function renderTagEdit(){
