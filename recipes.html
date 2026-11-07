@@ -307,7 +307,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
   </div>
 </section>
 
-<div class="busy" id="busy" hidden role="status"><div class="busycard"><span class="spin" style="width:22px;height:22px"></span><b id="busyTitle">AI is watching the video…</b><span class="src" id="busySub">This usually takes 20–60 seconds. Keep the app open.</span></div></div>
+<div class="busy" id="busy" hidden role="status"><div class="busycard"><span class="spin" style="width:22px;height:22px"></span><b id="busyTitle">AI is watching the video…</b><span class="num" id="busyTime">0:00</span><span class="src" id="busySub">Usually 30 seconds to 2 minutes. Keep the app open and your screen on.</span><button type="button" class="btn" id="busyCancel">Cancel</button></div></div>
 
 <!-- COOKING MODE -->
 <section class="sheet" id="cook" hidden aria-label="Cooking mode">
@@ -356,8 +356,8 @@ function toast(msg,action,fn){const t=$("toast");t.textContent=msg;
   t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,action?5000:3200)}
 
 /* ---------- server ---------- */
-async function post(body){
-  const r=await fetch(API.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({key:API.key},body))});
+async function post(body,signal){
+  const r=await fetch(API.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({key:API.key},body)),signal});
   return r.json();
 }
 // Unsaved changes are kept on this device until the Sheet confirms them, even if the app is closed.
@@ -625,10 +625,25 @@ async function pickVideo(input,merge){
   runAI({data,mime:f.type||"video/mp4"},merge,frame);
 }
 $("vidFile").onchange=e=>pickVideo(e.target,false);
+const AI_LIMIT=5*60*1000;   // Google's script runner stops at 6 minutes, so give up a little before
+let aiCtl=null;
+$("busyCancel").onclick=()=>{if(aiCtl)aiCtl.abort("cancel")};
 async function runAI(req,merge,frame){
   $("busyTitle").textContent="AI is watching the video…"; $("busy").hidden=false;
+  aiCtl=new AbortController(); const ctl=aiCtl, t0=Date.now();
+  const tick=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);$("busyTime").textContent=Math.floor(s/60)+":"+pad(s%60);
+    if(s>90)$("busySub").textContent="Taking longer than usual. Google's AI may be busy. Keep the app open.";},1000);
+  const limit=setTimeout(()=>ctl.abort("timeout"),AI_LIMIT);
+  let lock=null; try{lock=await navigator.wakeLock.request("screen")}catch(e){}
+  $("busyTime").textContent="0:00"; $("busySub").textContent="Usually 30 seconds to 2 minutes. Keep the app open and your screen on.";
   try{
-    const j=await post(Object.assign({action:"aiVideo"},req));
+    let j;
+    try{j=await post(Object.assign({action:"aiVideo"},req),ctl.signal)}
+    catch(e){
+      if(ctl.signal.aborted&&ctl.signal.reason==="cancel") throw new Error("Cancelled.");
+      if(ctl.signal.aborted) throw new Error("That took too long. Google's AI may be busy. Try again in a few minutes, or use a shorter clip.");
+      throw new Error("Lost the connection while the AI was working. Check your signal and try again.");
+    }
     if(j.error==="bad_request") throw new Error("Update your Apps Script to turn on AI video reading.");
     if(j.error) throw new Error(j.message||"AI couldn't read that video.");
     const r=j.recipe;
@@ -643,7 +658,7 @@ async function runAI(req,merge,frame){
       openEdit(Object.assign({id:"r"+Date.now().toString(36),added:new Date().toISOString(),fav:false,cooked:[],url:"",video:"",image:frame||""},r),true);
     }
   }catch(e){toast(e.message)}
-  finally{$("busy").hidden=true}
+  finally{$("busy").hidden=true;clearInterval(tick);clearTimeout(limit);aiCtl=null;try{lock&&lock.release()}catch(e){}}
 }
 
 /* ---------- links ---------- */
