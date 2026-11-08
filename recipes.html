@@ -162,7 +162,8 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .tw{position:relative;display:block;width:96px;height:96px}
 .play{position:absolute;right:6px;bottom:6px;width:24px;height:24px;border-radius:99px;background:rgba(0,0,0,.7);color:#fff;font-size:10px;display:grid;place-items:center;padding-left:2px}
 .upl{gap:8px}
-.upl .btn{font-weight:500}
+.upl .btn{font-weight:500;font-size:14px;padding:8px 12px}
+.upl{flex-wrap:nowrap}
 .busy{position:fixed;inset:0;z-index:60;background:rgba(5,5,7,.8);display:grid;place-items:center;padding:16px}
 .busycard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;display:grid;gap:8px;justify-items:center;text-align:center;max-width:320px}
 .est{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);margin-left:4px}
@@ -206,6 +207,11 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
   linear-gradient(to bottom,transparent 33.2%,rgba(255,255,255,.35) 33.3%,rgba(255,255,255,.35) 33.5%,transparent 33.6%,transparent 66.5%,rgba(255,255,255,.35) 66.6%,rgba(255,255,255,.35) 66.8%,transparent 66.9%)}
 .cropctl{flex-wrap:nowrap}
 .cropctl input{flex:1;accent-color:var(--accent)}
+.attachments{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.attachments li{display:flex;align-items:center;gap:6px;background:var(--raised);border:1px solid var(--line);border-radius:99px;padding:4px 6px 4px 12px;font-size:13px;max-width:100%}
+.attachments li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
+.attachments button{background:none;border:0;color:var(--muted);font-size:16px;line-height:1;padding:2px 6px}
+#importText{min-height:110px}
 </style>
 </head>
 <body>
@@ -230,10 +236,13 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
     <form class="panel" id="importForm" novalidate>
       <label for="importUrl" class="lbl">Add a recipe</label>
       <div class="row">
-        <input id="importUrl" class="field" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste a recipe link">
+        <input id="importUrl" class="field" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste a link (website, TikTok, Instagram, YouTube)">
         <button type="submit" class="btn primary" id="importBtn">Import</button>
       </div>
-      <div class="row upl"><span class="src">or</span><label class="btn" for="vidFile" id="vidLabel">Scan photos or videos</label><input id="vidFile" type="file" accept="image/*,video/*,application/pdf,.pdf" multiple hidden><span class="src" id="aiHint"></span></div>
+      <div class="row upl"><label class="btn" for="vidFile" id="vidLabel">+ Video, photo, PDF</label><input id="vidFile" type="file" accept="image/*,video/*,application/pdf,.pdf" multiple hidden><button type="button" class="btn" id="textBtn" aria-expanded="false">+ Paste text</button></div>
+      <ul class="attachments" id="attachList" hidden></ul>
+      <textarea id="importText" class="field" hidden placeholder="Paste the video's description or caption, or any recipe text"></textarea>
+      <div class="src" id="aiHint"></div>
       <div class="err" id="importErr" hidden></div>
     </form>
     <input id="search" class="field" type="search" placeholder="Search recipes or ingredients" autocomplete="off" aria-label="Search recipes">
@@ -569,7 +578,7 @@ function renderList(){
   renderChips();
   const list=recipes.filter(matches).sort((a,b)=>(b.fav?1:0)-(a.fav?1:0)||String(b.added||"").localeCompare(String(a.added||"")));
   const el=$("cards");
-  if(!recipes.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><b>No recipes yet</b><span>Paste a recipe link above and tap Import. Most recipe sites come in with photo, ingredients, steps and often calories and protein.</span></div>';return}
+  if(!recipes.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><b>No recipes yet</b><span>Add one above: paste a link, attach a video, photo or PDF, or paste recipe text, then tap Import. You can mix them, like a TikTok link plus the saved video.</span></div>';return}
   if(!list.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><b>No matches</b><span>Try another word or tag.</span></div>';return}
   el.innerHTML=list.map(r=>`<div class="swipe" data-id="${esc(r.id)}"><button type="button" class="swdel" data-del="${esc(r.id)}" tabindex="-1" aria-label="Delete ${esc(r.title)}">Delete</button><button type="button" class="card" data-id="${esc(r.id)}"><span class="tw">${thumb(r,"thumb")}${r.video?'<span class="play" aria-label="Has video">▶</span>':""}</span><div class="cbody"><div class="ctitle">${r.fav?'<span class="star">★</span> ':""}${esc(r.title)}</div><div class="meta">${cardMeta(r)}</div></div></button></div>`).join("");
 }
@@ -614,11 +623,38 @@ function commitDelete(){if(!pendingDel)return;clearTimeout(pendingDel.t);enqueue
 window.addEventListener("pagehide",commitDelete);
 
 /* ---------- import ---------- */
+/* attachments + pasted text that go along with (or instead of) a link */
+let attached=[];
+function renderAttached(){
+  const ul=$("attachList"); ul.hidden=!attached.length;
+  ul.innerHTML=attached.map((f,i)=>`<li><span>${/^video/.test(f.type)?"🎬":/pdf/i.test(f.type+f.name)?"📄":"🖼"} ${esc(f.name)}</span><button type="button" data-i="${i}" aria-label="Remove ${esc(f.name)}">×</button></li>`).join("");
+  updateHint();
+}
+function updateHint(){
+  const hasLink=!!$("importUrl").value.trim(), social=isVideo($("importUrl").value.trim()), n=attached.length, txt=!!$("importText").value.trim();
+  let h="";
+  if(n||txt) h=aiReady?(social?"AI will use the post's caption"+(n?" together with your files":"")+(txt?" and your text":"")+".":"AI will read "+(n?(n>1?"these files":"this file"):"")+(n&&txt?" and ":"")+(txt?"your text":"")+" and write the recipe."):"Reading files and text needs your free AI key (menu → AI reading).";
+  else if(social) h="Tip: attach the saved video too, and AI will use the caption and the video together.";
+  else if(!hasLink) h="Paste a link, add a video, photos or PDF, or paste recipe text. Mix them for the best result.";
+  $("aiHint").textContent=h;
+}
+$("attachList").addEventListener("click",e=>{const i=e.target.dataset&&e.target.dataset.i;if(i!=null){attached.splice(Number(i),1);renderAttached()}});
+$("textBtn").onclick=()=>{const t=$("importText");t.hidden=!t.hidden;$("textBtn").setAttribute("aria-expanded",!t.hidden);if(!t.hidden)t.focus();updateHint()};
+$("importUrl").addEventListener("input",updateHint); $("importText").addEventListener("input",updateHint);
+function clearImport(){attached=[];$("importUrl").value="";$("importText").value="";$("importText").hidden=true;$("textBtn").setAttribute("aria-expanded","false");renderAttached()}
+
 $("importForm").addEventListener("submit",async e=>{
   e.preventDefault();
   const raw=$("importUrl").value.trim(), m=raw.match(/https?:\/\/\S+/i), err=$("importErr");
+  const text=$("importText").value.trim(), files=attached.slice();
   err.hidden=true;
-  if(!m){err.textContent="Paste a full link that starts with https://";err.hidden=false;return}
+  if(files.length||text){
+    if(!aiReady){$("aiSheet").hidden=false;renderAi();toast("Add your free AI key first.");return}
+    const url=m?m[0].replace(/[)\].,]+$/,""):"";
+    if(files.length>1&&!url&&!text){pendingFiles=files;$("multiCount").textContent=`${files.length} files selected`;$("multi").hidden=false;return}
+    const ok=await scanOne(files,false,{url,text}); if(ok) clearImport(); return;
+  }
+  if(!m){err.textContent=raw?"Paste a full link that starts with https://":"Paste a link, add a video, photos or PDF, or paste some recipe text.";err.hidden=false;return}
   const url=m[0].replace(/[)\].,]+$/,"");
   const vk=(videoInfo(url)||{}).key; const dup=recipes.find(r=>r.url===url||(vk&&(videoInfo(r.video)||{}).key===vk)); if(dup){openDetail(dup.id);toast("You already saved this one.");return}
   const btn=$("importBtn"); btn.disabled=true; btn.innerHTML='<span class="spin"></span>Importing';
@@ -631,7 +667,7 @@ $("importForm").addEventListener("submit",async e=>{
     if((r.nutrition||{}).protein>=30) t.add("High protein");
     if(r.time&&r.time<=30) t.add("Quick");
     r.tags=[...t];
-    $("importUrl").value="";
+    clearImport();
     openEdit(Object.assign({id:"r"+Date.now().toString(36),added:new Date().toISOString(),fav:false,cooked:[],notes:""},r),true);
   }catch(ex){err.textContent=ex.message+" You can still add it: the form opens with the link filled in.";err.hidden=false;
     openEdit({id:"r"+Date.now().toString(36),added:new Date().toISOString(),url,title:"",image:"",servings:null,time:null,ingredients:[],steps:[],nutrition:{},tags:[],fav:false,cooked:[],notes:"",partial:true},true)}
@@ -640,8 +676,8 @@ $("importForm").addEventListener("submit",async e=>{
 
 /* ---------- AI video reading ---------- */
 function renderAi(){
+  setTimeout(updateHint,0);
   $("aiMenuSub").textContent=aiReady?"On · Gemini is set up":"Set up your free Gemini key";
-  $("aiHint").textContent=aiReady?"cookbook pages, cards, screenshots, PDFs, videos":"needs your free AI key (menu)";
   $("aiState").className="notice"+(aiReady?"":" warn");
   $("aiState").textContent=aiReady?"AI reading is on.":"AI reading is off. Add your free key below to turn it on.";
   $("aiRemove").hidden=!aiReady;
@@ -694,12 +730,11 @@ let pendingFiles=null, pendingMerge=false;
 async function pickVideo(input,merge){
   const files=[...(input.files||[])].slice(0,10); input.value=""; if(!files.length) return;
   if(!aiReady){$("aiSheet").hidden=false;renderAi();toast("Add your free AI key first.");return}
-  if(files.length===1||merge){scanOne(files,merge);return}
-  pendingFiles=files; $("multiCount").textContent=`${files.length} files selected`; $("multi").hidden=false;
+  scanOne(files,true,{url:draft&&draft.video||""});   // from the review screen: video + the post's caption
 }
-$("vidFile").onchange=e=>pickVideo(e.target,false);
-$("mOne").onclick=()=>{$("multi").hidden=true;scanOne(pendingFiles,false);pendingFiles=null};
-$("mMany").onclick=()=>{$("multi").hidden=true;scanMany(pendingFiles);pendingFiles=null};
+$("vidFile").onchange=e=>{attached=attached.concat([...e.target.files]).slice(0,10);e.target.value="";renderAttached()};
+$("mOne").onclick=async()=>{$("multi").hidden=true;const f=pendingFiles;pendingFiles=null;if(await scanOne(f,false,{}))clearImport()};
+$("mMany").onclick=async()=>{$("multi").hidden=true;const f=pendingFiles;pendingFiles=null;clearImport();scanMany(f)};
 $("mCancel").onclick=()=>{$("multi").hidden=true;pendingFiles=null};
 
 const AI_LIMIT=5*60*1000;   // Google's script runner stops at 6 minutes, so give up a little before
@@ -738,19 +773,24 @@ function mergeIntoDraft(r,thumb){
   openEdit(draft,true);
 }
 /* several files (or one) -> one recipe, then the review screen */
-async function scanOne(files,merge){
+async function scanOne(files,merge,extra){
+  extra=extra||{}; const f0=files[0];
+  const title=files.length>1?`AI is reading ${files.length} files…`:f0?(/^video/.test(f0.type)?"AI is watching the video…":/pdf/i.test(f0.type+f0.name)?"AI is reading the PDF…":"AI is reading the photo…"):"AI is reading the recipe…";
   try{
-    await withBusy(files.length>1?`AI is reading ${files.length} files…`:(/^video/.test(files[0].type)?"AI is watching the video…":/pdf/i.test(files[0].type+files[0].name)?"AI is reading the PDF…":"AI is reading the photo…"),async ctl=>{
+    await withBusy(title,async ctl=>{
       $("busySub").textContent="Getting your files ready…";
       const prepped=[]; for(const f of files) prepped.push(await prepFile(f));
       const total=prepped.reduce((a,x)=>a+x.size,0);
       if(total>MAXMB*1024*1024) throw new Error(`Those files add up to ${Math.round(total/1048576)} MB. Keep it under ${MAXMB} MB together, or import them as separate recipes.`);
       $("busySub").textContent="Usually 30 seconds to 2 minutes. Keep the app open and your screen on.";
-      const r=await aiCall({files:prepped.map(x=>({data:x.data,mime:x.mime}))},ctl);
-      const thumb=(prepped.find(x=>x.thumb)||{}).thumb||"";
+      const req={files:prepped.map(x=>({data:x.data,mime:x.mime}))};
+      if(extra.url) req.url=extra.url; if(extra.text) req.text=extra.text;
+      const r=await aiCall(req,ctl);
+      const thumb=(prepped.find(x=>x.thumb)||{}).thumb||r.postImage||""; delete r.postImage;
       if(merge&&draft) mergeIntoDraft(r,thumb); else openEdit(newRecipe(Object.assign({image:thumb},r)),true);
     });
-  }catch(e){toast(e.message)}
+    return true;
+  }catch(e){toast(e.message);return false}
 }
 /* several files -> one recipe each, saved straight to your list */
 async function scanMany(files){
@@ -968,7 +1008,7 @@ function openEdit(r,isNew){
   $("eNotes").value=r.notes||""; $("eLinks").value=(r.links||[]).map(l=>(l.label&&l.label!==hostOf(l.url)?l.label+" ":"")+l.url).join("\n"); $("eImg").value=String(r.image||"").startsWith("data:")?"":(r.image||""); $("eImg").placeholder=String(r.image||"").startsWith("data:")?"Using a photo you added":""; $("eUrl").value=r.url||""; $("eVideo").value=r.video||"";
   let note="";
   const v=videoInfo(r.video), aiBtn=(r.fromVideo&&v)?(v.kind==="YouTube"?'<button type="button" class="btn primary" id="eAI">Have AI watch the video</button>':`<label class="btn primary" for="vidFile2">Upload the video or screenshots for AI</label><input id="vidFile2" type="file" accept="image/*,video/*,application/pdf,.pdf" multiple hidden><div class="src" style="margin-top:6px">Save it first: in ${v.kind}, tap Share → ${v.kind==="TikTok"?"Save video":"screen record the reel"}.</div>`):"";
-  if(isNew&&r.byAI) note=`<div class="notice">AI read this and wrote it out. Amounts marked "(est.)" were guessed${r.nutritionEstimated?", and the macros are AI estimates. Swap in Lose It's numbers if they differ":""}. Check it over, then Save.</div>`;
+  if(isNew&&r.byAI) note=`<div class="notice">${r.usedCaption?"AI combined the post's caption with what you added and wrote this out.":"AI read this and wrote it out."} Amounts marked "(est.)" were guessed${r.nutritionEstimated?", and the macros are AI estimates. Swap in Lose It's numbers if they differ":""}. Check it over, then Save.</div>`;
   else if(isNew&&r.partial&&r.fromVideo) note='<div class="notice warn">Saved the video, but its caption has no recipe to read. Let AI watch it instead, or fill in what you need.'+aiBtn+'</div>';
   else if(isNew&&r.partial) note='<div class="notice warn">This site doesn\'t share its recipe in a readable format, so fill in what you need. Tip: Lose It\'s importer may still read it.</div>';
   else if(isNew&&r.fromVideo&&!isVideo(r.url)){let h="";try{h=new URL(r.url).hostname.replace(/^www\./,"")}catch(e){}note=`<div class="notice">Found the written recipe on ${esc(h||"the creator's site")} from the video's caption${(r.nutrition||{}).calories!=null?", with nutrition":""}. The video is saved too. Check it over, add tags, then Save.</div>`}
@@ -999,7 +1039,7 @@ $("eSave").onclick=()=>{
   Object.assign(draft,{title:$("eTitle").value.trim()||"Untitled recipe",servings:num("eServ"),time:num("eTime"),
     nutrition:{calories:num("eCal"),protein:num("ePro"),carbs:num("eCarb"),fat:num("eFat")},
     ingredients:lines("eIng"),steps:lines("eSteps"),notes:$("eNotes").value.trim(),links:parseLinks($("eLinks").value),image:imgField||keepImg,url:$("eUrl").value.trim()});
-  delete draft.byAI;
+  delete draft.byAI; delete draft.usedCaption;
   {const v=$("eVideo").value.trim(); draft.video=isVideo(v)?v:"";}
   delete draft.partial;
   const i=recipes.findIndex(x=>x.id===draft.id); if(i>=0) recipes[i]=draft; else recipes.unshift(draft);
