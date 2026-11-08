@@ -1075,6 +1075,44 @@ async function post_(body,signal){ // like post(), but turns a cancelled wait in
   try{return await post(body,signal)}catch(e){if(signal&&signal.aborted)throw new Error("cancel");throw e}
 }
 
+/* ---------- update a saved recipe from a pasted caption ---------- */
+function askCaption(r){
+  return new Promise(res=>{
+    const v=videoInfo(r.video), kind=v?v.kind:"", head=$("capDlg").querySelector("b"), head0=head.innerHTML;
+    head.innerHTML=kind?`Paste the <span id="capKind">${esc(kind)}</span> caption`:'Paste the caption or recipe text';
+    $("capMsg").textContent=`AI will compare it with this recipe, use its exact amounts, add anything missing and convert to grams where it can. You'll check the changes before anything is saved.`;
+    $("capOpen").hidden=!r.video; if(r.video){$("capOpen").href=r.video;$("capOpen").textContent=`Open in ${kind||"the app"} ↗`}
+    $("capText").value=""; $("capUse").textContent="Update recipe"; $("capSkip").hidden=true;
+    $("capDlg").hidden=false; $("capText").focus();
+    const close=v=>{$("capDlg").hidden=true;head.innerHTML=head0;$("capSkip").hidden=false;$("capOpen").hidden=false;$("capUse").textContent="Use this text";["capUse","capSkip","capCancel","capPaste"].forEach(id=>$(id).onclick=null);res(v)};
+    $("capPaste").onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t){$("capText").value=t}}catch(e){toast("Tap and hold in the box, then choose Paste.")}};
+    $("capUse").onclick=()=>{const t=$("capText").value.trim(); if(!t){toast("Paste the caption first.");return} close(t)};
+    $("capCancel").onclick=()=>close(null);
+  });
+}
+async function updateFromCaption(r){
+  const cap=await askCaption(r); if(!cap) return;
+  const text="CAPTION / DESCRIPTION FROM THE VIDEO:\n"+cap+
+    "\n\nTHE RECIPE AS SAVED SO FAR (it may have missed or guessed some things). Update it using the caption: use the caption's exact amounts (they replace any \"(est.)\" guesses), "+
+    "add any missing ingredients and steps, fix the title, servings and time if the caption states them, and keep anything the caption doesn't cover.\n"+
+    "Title: "+(r.title||"")+"\nServings: "+(r.servings||"")+"\nTime (min): "+(r.time||"")+
+    "\nIngredients:\n"+(r.ingredients||[]).join("\n")+"\nSteps:\n"+(r.steps||[]).join("\n")+(r.notes?"\nNotes: "+r.notes:"");
+  try{
+    await withBusy("AI is updating the recipe…",async ctl=>{
+      $("busySub").textContent="Usually 10 to 30 seconds. Keep the app open.";
+      let u; try{u=await aiCall({text},ctl)}catch(e){ if(e.reason!=="rate"&&e.reason!=="busy") throw e; $("busySub").textContent="Google asked us to slow down. Trying again in a few seconds…"; await sleep(10000); u=await aiCall({text},ctl) }
+      const keepMacros=r.nutritionEstimated===false&&Object.values(r.nutrition||{}).some(x=>x!=null);   // you entered Lose It's numbers: keep them
+      const m=JSON.parse(JSON.stringify(r));
+      Object.assign(m,{title:u.title||r.title,servings:u.servings||r.servings,time:u.time||r.time,
+        ingredients:u.ingredients,steps:u.steps.length?u.steps:r.steps,
+        tags:[...new Set([...(r.tags||[]),...(u.tags||[])])],aiUpdated:true});
+      if(!keepMacros&&u.nutrition&&Object.values(u.nutrition).some(x=>x!=null)){m.nutrition=u.nutrition;m.nutritionEstimated=u.nutritionEstimated}
+      if(u.notes&&!(r.notes||"").includes(u.notes)) m.notes=[r.notes,u.notes].filter(Boolean).join(" ");
+      openEdit(m,false);
+    });
+  }catch(e){toast(e.message)}
+}
+
 /* ---------- detail ---------- */
 const byId=id=>recipes.find(r=>r.id===id);
 function openDetail(id){openId=id;const r=byId(id);if(!r)return;servings=r.servings||1;renderDetail();$("detail").hidden=false;$("detail").scrollTop=0}
@@ -1101,6 +1139,7 @@ function renderDetail(){
       <button type="button" class="btn" id="aGroc">Add to grocery list</button>
       <button type="button" class="btn" id="aLoseIt">Copy link for Lose It</button>
       <button type="button" class="btn" id="aPdf">Save as PDF</button>
+      <button type="button" class="btn wide" id="aCap">Update from a caption or text</button>
     </div>
     <div class="panel">
       <div class="sectionhead"><h3>Ingredients</h3>
@@ -1126,6 +1165,7 @@ function renderDetail(){
     saveGrocery(); toast(`Added ${(r.ingredients||[]).length} items to your grocery list.`);
   };
   $("aPdf").onclick=()=>printRecipe(r);
+  $("aCap").onclick=()=>updateFromCaption(r);
   $("dCoverFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
     try{const d=await coverFromFile(f); if(!d)return; r.image=d;cache();renderDetail();renderList();enqueue({action:"saveRecipe",recipe:r});toast("Cover photo updated.")}catch(err){toast(err.message)}};
   $("aLoseIt").onclick=async()=>{
@@ -1157,6 +1197,7 @@ function openEdit(r,isNew){
   else if(isNew&&r.fromVideo&&!isVideo(r.url)){let h="";try{h=new URL(r.url).hostname.replace(/^www\./,"")}catch(e){}note=`<div class="notice">Found the written recipe on ${esc(h||"the creator's site")} from the video's caption${(r.nutrition||{}).calories!=null?", with nutrition":""}. The video is saved too. Check it over, add tags, then Save.</div>`}
   else if(isNew&&r.fromVideo) note='<div class="notice">Saved the video. These ingredients and steps were read from the caption. If anything is missing, let AI watch the video.'+aiBtn+'</div>';
   else if(isNew) note=`<div class="notice">Imported${(r.nutrition||{}).calories!=null?" with the site's nutrition":", but the site doesn't list nutrition. Add Lose It's numbers below once you import it there"}. Check it over, add tags, then Save.</div>`;
+  if(r.aiUpdated) note=`<div class="notice">AI updated this from the caption${r.nutritionEstimated===false?" and kept your macros":""}. Check the ingredients and steps, then Save. Cancel keeps the recipe as it was.</div>`;
   $("eNotice").innerHTML=note;
   if($("eAI")) $("eAI").onclick=()=>runAI({url:draft.video},true);
   if($("vidFile2")) $("vidFile2").onchange=e=>pickVideo(e.target,true);
@@ -1182,7 +1223,7 @@ $("eSave").onclick=()=>{
   Object.assign(draft,{title:$("eTitle").value.trim()||"Untitled recipe",servings:num("eServ"),time:num("eTime"),
     nutrition:{calories:num("eCal"),protein:num("ePro"),carbs:num("eCarb"),fat:num("eFat")},
     ingredients:lines("eIng"),steps:lines("eSteps"),notes:$("eNotes").value.trim(),links:parseLinks($("eLinks").value),image:imgField||keepImg,url:$("eUrl").value.trim()});
-  delete draft.byAI; delete draft.usedCaption;
+  delete draft.byAI; delete draft.usedCaption; delete draft.aiUpdated;
   {const v=$("eVideo").value.trim(); draft.video=isVideo(v)?v:"";}
   delete draft.partial;
   const i=recipes.findIndex(x=>x.id===draft.id); if(i>=0) recipes[i]=draft; else recipes.unshift(draft);
