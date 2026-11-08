@@ -212,6 +212,8 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .attachments li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
 .attachments button{background:none;border:0;color:var(--muted);font-size:16px;line-height:1;padding:2px 6px}
 #importText{min-height:110px}
+.capcard{width:min(420px,100%);justify-items:stretch;text-align:center;gap:10px}
+.capcard textarea{min-height:150px;font-size:15px}
 </style>
 </head>
 <body>
@@ -357,6 +359,14 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
   <button type="button" class="btn primary choice" id="mOne"><b>One recipe</b><span>Pages, screenshots or PDFs of the same recipe, or a video plus photos</span></button>
   <button type="button" class="btn choice" id="mMany"><b>Separate recipes</b><span>One recipe per file, saved straight to your list</span></button>
   <button type="button" class="btn" id="mCancel" style="background:none;border:0;color:var(--muted)">Cancel</button>
+</div></div>
+<div class="busy" id="capDlg" hidden role="dialog" aria-label="Paste the caption"><div class="busycard capcard">
+  <b style="font-size:17px">Paste the <span id="capKind">TikTok</span> caption</b>
+  <span class="src" id="capMsg" style="text-align:left"></span>
+  <textarea id="capText" class="field" placeholder="Paste the caption or recipe text here"></textarea>
+  <div class="row" style="justify-content:space-between"><button type="button" class="btn" id="capPaste">Paste</button><a class="linkedit" id="capOpen" href="#" target="_blank" rel="noopener">Open ↗</a></div>
+  <button type="button" class="btn primary" id="capUse">Use this text</button>
+  <div class="row" style="justify-content:space-between"><button type="button" class="btn" id="capSkip" style="background:none;border:0;color:var(--muted)">Continue without</button><button type="button" class="btn" id="capCancel" style="background:none;border:0;color:var(--muted)">Cancel</button></div>
 </div></div>
 <div class="busy" id="busy" hidden role="status"><div class="busycard"><span class="spin" style="width:22px;height:22px"></span><b id="busyTitle">AI is watching the video…</b><span class="num" id="busyTime">0:00</span><span class="src" id="busySub">Usually 30 seconds to 2 minutes. Keep the app open and your screen on.</span><button type="button" class="btn" id="busyCancel">Cancel</button></div></div>
 
@@ -648,9 +658,18 @@ $("importForm").addEventListener("submit",async e=>{
   const raw=$("importUrl").value.trim(), m=raw.match(/https?:\/\/\S+/i), err=$("importErr");
   const text=$("importText").value.trim(), files=attached.slice();
   err.hidden=true;
+  const link=m?m[0].replace(/[)\].,]+$/,""):"";
+  const social=(videoInfo(link)||{}).kind; 
+  if(aiReady&&!text&&(social==="TikTok"||social==="Instagram")){
+    const vk=(videoInfo(link)||{}).key; const dup=recipes.find(r=>vk&&(videoInfo(r.video)||{}).key===vk);
+    if(dup&&!files.length){openDetail(dup.id);toast("You already saved this one.");return}
+    const c=await checkCaption(link,social); if(c===null) return;   // cancelled
+    if(!files.length&&!c.text&&c.writtenLink){ /* caption links to a written recipe: use the regular importer, which follows it */ }
+    else{ const ok=await scanOne(files,false,{url:link,text:c.text,caption:c.caption,captionChecked:true}); if(ok) clearImport(); return; }
+  }
   if(files.length||text){
     if(!aiReady){$("aiSheet").hidden=false;renderAi();toast("Add your free AI key first.");return}
-    const url=m?m[0].replace(/[)\].,]+$/,""):"";
+    const url=link;
     if(files.length>1&&!url&&!text){pendingFiles=files;$("multiCount").textContent=`${files.length} files selected`;$("multi").hidden=false;return}
     const ok=await scanOne(files,false,{url,text}); if(ok) clearImport(); return;
   }
@@ -785,6 +804,7 @@ async function scanOne(files,merge,extra){
       $("busySub").textContent="Usually 30 seconds to 2 minutes. Keep the app open and your screen on.";
       const req={files:prepped.map(x=>({data:x.data,mime:x.mime}))};
       if(extra.url) req.url=extra.url; if(extra.text) req.text=extra.text;
+      if(extra.captionChecked){req.captionChecked=true; req.caption=extra.caption||"";}
       const r=await aiCall(req,ctl);
       const thumb=(prepped.find(x=>x.thumb)||{}).thumb||r.postImage||""; delete r.postImage;
       if(merge&&draft) mergeIntoDraft(r,thumb); else openEdit(newRecipe(Object.assign({image:thumb},r)),true);
@@ -930,6 +950,37 @@ function printRecipe(r){
   const done=()=>{$("printArea").innerHTML="";window.removeEventListener("afterprint",done)};
   window.addEventListener("afterprint",done);
   setTimeout(()=>{try{window.print()}catch(e){toast("Printing isn't available here. Open the app in Safari and use Share → Print.")}},150);
+}
+
+/* ---------- caption check (TikTok / Instagram) ---------- */
+function looksLikeRecipe(t){
+  t=String(t||""); if(t.length<40) return false;
+  const units=(t.match(/(\d+\s*\/\s*\d+|\d*\.?\d+|[¼½¾⅓⅔])\s*(cups?|c\.|tbsps?|tablespoons?|tsps?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|cloves?|cans?|scoops?|slices?|pieces?|eggs?)\b/gi)||[]).length;
+  return units>=2||(/ingredients?\b/i.test(t)&&/\d/.test(t));
+}
+/** Returns {text, caption, writtenLink} to continue, or null if you cancelled. */
+async function checkCaption(link,kind){
+  let post=null;
+  try{
+    await withBusy("Reading the "+kind+" caption…",async ctl=>{$("busySub").textContent="A few seconds.";$("busySub").dataset.fixed="1";
+      const j=await post_({action:"caption",url:link},ctl.signal); post=j.post||null});
+  }catch(e){ if(String(e.message)==="cancel") return null }
+  const caption=(post&&post.caption)||"";
+  const writtenLink=(caption.match(/https?:\/\/\S+/g)||[]).some(u=>!/tiktok|instagram|youtu|linktr|amzn|amazon|shopmy|ltk/i.test(u));
+  if(looksLikeRecipe(caption)||writtenLink) return {text:"",caption,writtenLink};   // good caption, or it links to the written recipe
+  return new Promise(res=>{
+    $("capKind").textContent=kind; $("capOpen").href=link; $("capOpen").textContent="Open in "+kind+" ↗";
+    $("capMsg").textContent=caption?`The ${kind} caption doesn't seem to include the recipe. If the full recipe is in the caption, copy it in ${kind} and paste it below.`:`Couldn't read the ${kind} caption. Copy it in ${kind} (tap the caption, then hold to copy) and paste it below.`;
+    $("capText").value=caption; $("capDlg").hidden=false; $("capText").focus();
+    const close=v=>{$("capDlg").hidden=true;["capUse","capSkip","capCancel","capPaste"].forEach(id=>$(id).onclick=null);res(v)};
+    $("capPaste").onclick=async()=>{try{const t=await navigator.clipboard.readText();if(t){$("capText").value=t}}catch(e){toast("Tap and hold in the box, then choose Paste.")}};
+    $("capUse").onclick=()=>{const t=$("capText").value.trim();close({text:t===caption?"":t,caption,writtenLink:false})};
+    $("capSkip").onclick=()=>close({text:"",caption,writtenLink});
+    $("capCancel").onclick=()=>close(null);
+  });
+}
+async function post_(body,signal){ // like post(), but turns a cancelled wait into a clear error
+  try{return await post(body,signal)}catch(e){if(signal&&signal.aborted)throw new Error("cancel");throw e}
 }
 
 /* ---------- detail ---------- */
