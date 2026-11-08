@@ -214,6 +214,11 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 #importText{min-height:110px}
 .capcard{width:min(420px,100%);justify-items:stretch;text-align:center;gap:10px}
 .capcard textarea{min-height:150px;font-size:15px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.searchrow{flex-wrap:nowrap}
+.searchrow #search{flex:1 1 auto}
+.sortwrap{flex:0 0 auto}
+.sortwrap select{width:auto;max-width:150px;padding-right:26px}
 </style>
 </head>
 <body>
@@ -247,7 +252,22 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
       <div class="src" id="aiHint"></div>
       <div class="err" id="importErr" hidden></div>
     </form>
-    <input id="search" class="field" type="search" placeholder="Search recipes or ingredients" autocomplete="off" aria-label="Search recipes">
+    <div class="row searchrow">
+  <input id="search" class="field" type="search" placeholder="Search recipes or ingredients" autocomplete="off" aria-label="Search recipes">
+      <label class="sortwrap" for="sortBy"><span class="sr">Sort recipes</span>
+        <select id="sortBy" class="field">
+          <option value="new">Recently added</option>
+          <option value="old">Oldest first</option>
+          <option value="az">A–Z</option>
+          <option value="cookedRecent">Recently cooked</option>
+          <option value="cookedMost">Most cooked</option>
+          <option value="protein">Most protein</option>
+          <option value="cal">Fewest calories</option>
+          <option value="quick">Quickest</option>
+          <option value="fav">Favorites first</option>
+        </select>
+      </label>
+    </div>
     <div class="chips" id="tagChips" role="toolbar" aria-label="Filter by tag"></div>
     <div class="cards" id="cards"></div>
   </main>
@@ -596,13 +616,31 @@ function thumb(r,cls){
 }
 function renderList(){
   renderChips();
-  const list=recipes.filter(matches).sort((a,b)=>(b.fav?1:0)-(a.fav?1:0)||String(b.added||"").localeCompare(String(a.added||"")));
+  const list=recipes.filter(matches).sort(SORTS[sortBy]||SORTS.new);
   const el=$("cards");
   if(!recipes.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><b>No recipes yet</b><span>Add one above: paste a link, attach a video, photo or PDF, or paste recipe text, then tap Import. You can mix them, like a TikTok link plus the saved video.</span></div>';return}
   if(!list.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><b>No matches</b><span>Try another word or tag.</span></div>';return}
   el.innerHTML=list.map(r=>`<div class="swipe" data-id="${esc(r.id)}"><button type="button" class="swdel" data-del="${esc(r.id)}" tabindex="-1" aria-label="Delete ${esc(r.title)}">Delete</button><button type="button" class="card" data-id="${esc(r.id)}"><span class="tw">${thumb(r,"thumb")}${r.video?'<span class="play" aria-label="Has video">▶</span>':""}</span><div class="cbody"><div class="ctitle">${r.fav?'<span class="star">★</span> ':""}${esc(r.title)}</div><div class="meta">${cardMeta(r)}</div></div></button></div>`).join("");
 }
 $("tagChips").addEventListener("click",e=>{const b=e.target.closest(".chip");if(b){filterTag=b.dataset.t;renderList()}});
+/* sorting (remembered on this device) */
+const byAdded=(a,b)=>String(b.added||"").localeCompare(String(a.added||""));
+const lastCooked=r=>(r.cooked||[]).slice().sort().pop()||"";
+const nullsLast=(x,y,dir)=>(x==null&&y==null)?0:x==null?1:y==null?-1:dir*(x-y);
+const SORTS={
+  new:byAdded,
+  old:(a,b)=>-byAdded(a,b),
+  az:(a,b)=>String(a.title||"").localeCompare(String(b.title||""),undefined,{sensitivity:"base"}),
+  cookedRecent:(a,b)=>lastCooked(b).localeCompare(lastCooked(a))||byAdded(a,b),
+  cookedMost:(a,b)=>((b.cooked||[]).length-(a.cooked||[]).length)||byAdded(a,b),
+  protein:(a,b)=>nullsLast((a.nutrition||{}).protein,(b.nutrition||{}).protein,-1)||byAdded(a,b),
+  cal:(a,b)=>nullsLast((a.nutrition||{}).calories,(b.nutrition||{}).calories,1)||byAdded(a,b),
+  quick:(a,b)=>nullsLast(a.time,b.time,1)||byAdded(a,b),
+  fav:(a,b)=>((b.fav?1:0)-(a.fav?1:0))||byAdded(a,b)
+};
+let sortBy=lsGet(LS+".sort")||"new"; if(!SORTS[sortBy]) sortBy="new";
+$("sortBy").value=sortBy;
+$("sortBy").addEventListener("change",e=>{sortBy=e.target.value;lsSet(LS+".sort",sortBy);renderList()});
 $("search").addEventListener("input",e=>{query=e.target.value.trim();renderList()});
 /* swipe a card left to reveal Delete */
 const OPEN=-92; let sw=null, openSwipe=null, swiped=false;
@@ -739,13 +777,13 @@ function shrinkImage(file,max,q){return new Promise(res=>{
   const img=new Image(); img.onload=()=>{const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);
     c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);res(c.toDataURL("image/jpeg",q))};
   img.onerror=()=>res(""); img.src=URL.createObjectURL(file)})}
-async function prepFile(f){
+async function prepFile(f,many){
   if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)){
     if(f.size>20*1024*1024) throw new Error(`“${f.name}” is ${Math.round(f.size/1048576)} MB. PDFs need to be under 20 MB.`);
     return {data:await readB64(f),mime:"application/pdf",thumb:"",size:f.size};
   }
   if(/^image\//.test(f.type)||/\.(heic|heif|jpe?g|png|webp)$/i.test(f.name)){
-    const data=await shrinkImage(f,1600,.82); if(!data) throw new Error(`Couldn't open the photo “${f.name}”.`);
+    const data=await shrinkImage(f,many?1100:1400,many?.72:.78); if(!data) throw new Error(`Couldn't open the photo “${f.name}”.`);
     return {data,mime:"image/jpeg",thumb:await shrinkImage(f,320,.55),size:data.length*.75};
   }
   if(f.size>MAXMB*1024*1024) throw new Error(`“${f.name}” is ${Math.round(f.size/1048576)} MB. Trim videos under ${MAXMB} MB (about a minute).`);
@@ -781,7 +819,9 @@ async function withBusy(title,work){
   finally{$("busy").hidden=true;clearInterval(tick);aiCtl=null;delete $("busySub").dataset.fixed;try{lock&&lock.release()}catch(e){}}
 }
 /** One AI request (YouTube link, or a list of prepared files) -> recipe. */
-async function aiCall(req,ctl){
+async function aiCall(req,parent){
+  const ctl=new AbortController();
+  const onCancel=()=>ctl.abort(parent.signal.reason); if(parent.signal.aborted) onCancel(); else parent.signal.addEventListener("abort",onCancel);
   const limit=setTimeout(()=>ctl.abort("timeout"),AI_LIMIT);
   let j;
   try{j=await post(Object.assign({action:"aiVideo"},req),ctl.signal)}
@@ -789,7 +829,7 @@ async function aiCall(req,ctl){
     if(ctl.signal.aborted&&ctl.signal.reason==="cancel") throw new Error("Cancelled.");
     if(ctl.signal.aborted) throw new Error("That took too long. Google's AI may be busy. Try again in a few minutes, or use a shorter clip.");
     throw new Error("Lost the connection while the AI was working. Check your signal and try again.");
-  }finally{clearTimeout(limit)}
+  }finally{clearTimeout(limit);parent.signal.removeEventListener("abort",onCancel)}
   if(j.error==="bad_request") throw new Error("Update your Apps Script to turn on AI reading.");
   if(j.error) throw new Error(j.message||"AI couldn't read that.");
   if(!j.recipe.ingredients.length) throw new Error("AI didn't find a recipe there.");
@@ -808,7 +848,7 @@ async function scanOne(files,merge,extra){
   try{
     await withBusy(title,async ctl=>{
       $("busySub").textContent="Getting your files ready…";
-      const prepped=[]; for(const f of files) prepped.push(await prepFile(f));
+      const prepped=await Promise.all(files.map(f=>prepFile(f,files.length>2)));
       const total=prepped.reduce((a,x)=>a+x.size,0);
       if(total>MAXMB*1024*1024) throw new Error(`Those files add up to ${Math.round(total/1048576)} MB. Keep it under ${MAXMB} MB together, or import them as separate recipes.`);
       $("busySub").textContent="Usually 30 seconds to 2 minutes. Keep the app open and your screen on.";
@@ -823,23 +863,31 @@ async function scanOne(files,merge,extra){
   }catch(e){toast(e.message);return false}
 }
 /* several files -> one recipe each, saved straight to your list */
+const PARALLEL=3;   // how many files the AI reads at once (Google's free plan allows a handful of requests per minute)
 async function scanMany(files){
-  const done=[], failed=[];
+  const done=[], failed=[]; let next=0, working=0, stopped=false;
+  const show=()=>{$("busyTitle").textContent=`Read ${done.length+failed.length} of ${files.length}…`;
+    $("busySub").dataset.fixed="1"; $("busySub").textContent=`${done.length} saved${failed.length?`, ${failed.length} couldn't be read`:""} · reading ${working} at a time`};
   try{
     await withBusy("Importing recipes…",async ctl=>{
-      for(let i=0;i<files.length;i++){
-        $("busyTitle").textContent=`Reading ${i+1} of ${files.length}…`;
-        $("busySub").dataset.fixed="1"; $("busySub").textContent=files[i].name+(done.length?` · ${done.length} saved so far`:"");
-        try{
-          const x=await prepFile(files[i]);
-          const r=await aiCall({files:[{data:x.data,mime:x.mime}]},ctl);
-          const rec=newRecipe(Object.assign({image:x.thumb||""},r)); delete rec.byAI; delete rec.partial;
-          recipes.unshift(rec); cache(); enqueue({action:"saveRecipe",recipe:rec}); renderList(); done.push(rec.title);
-        }catch(e){ if(e.message==="Cancelled.") throw e; failed.push(files[i].name+": "+e.message) }
-      }
+      show();
+      const worker=async()=>{
+        while(next<files.length&&!ctl.signal.aborted){
+          const f=files[next++]; working++; show();
+          try{
+            const x=await prepFile(f,true);
+            let r; try{r=await aiCall({files:[{data:x.data,mime:x.mime}]},ctl)}
+            catch(e){ if(/busy|limit/i.test(e.message)&&!ctl.signal.aborted){await new Promise(z=>setTimeout(z,6000)); r=await aiCall({files:[{data:x.data,mime:x.mime}]},ctl)} else throw e }
+            const rec=newRecipe(Object.assign({image:x.thumb||""},r)); delete rec.byAI; delete rec.partial;
+            recipes.unshift(rec); cache(); enqueue({action:"saveRecipe",recipe:rec}); renderList(); done.push(rec.title);
+          }catch(e){ if(e.message==="Cancelled.") throw e; failed.push(f.name+": "+e.message) }
+          finally{ working--; show() }
+        }
+      };
+      await Promise.all(Array.from({length:Math.min(PARALLEL,files.length)},worker));
     });
-  }catch(e){ if(e.message!=="Cancelled.") failed.push(e.message) }
-  const msg=`Imported ${done.length} of ${files.length} recipe${files.length===1?"":"s"}.`+(done.length?" Open each one to check the amounts.":"");
+  }catch(e){ if(e.message!=="Cancelled.") failed.push(e.message); else stopped=true }
+  const msg=(stopped?"Stopped. ":"")+`Imported ${done.length} of ${files.length} recipe${files.length===1?"":"s"}.`+(done.length?" Open each one to check the amounts.":"");
   toast(failed.length?msg+" Couldn't read: "+failed.map(f=>f.split(":")[0]).join(", "):msg);
 }
 async function runAI(req,merge){   // YouTube link from the review screen
