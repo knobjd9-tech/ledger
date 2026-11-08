@@ -371,6 +371,12 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
       <div class="src">The key is stored in your Google Sheet's script settings, not in this app. On Google's free plan, Google may use what you send to improve its products.</div>
       <button type="button" class="btn danger" id="aiRemove" hidden style="justify-self:start">Remove key</button>
     </div>
+    <div class="panel" id="speedPanel">
+      <h3>Speed test</h3>
+      <p style="margin:0" class="src">Checks which of Google's AI models answers fastest on your key and switches to it. This also runs on its own every few days.</p>
+      <button type="button" class="btn" id="speedBtn" style="justify-self:start">Run speed test</button>
+      <div id="speedOut" class="src"></div>
+    </div>
   </div>
 </section>
 
@@ -762,6 +768,16 @@ async function saveKey(k){
 }
 $("aiSave").onclick=()=>{const k=$("aiKey").value.trim();if(k)saveKey(k)};
 $("aiRemove").onclick=()=>saveKey("");
+$("speedBtn").onclick=async()=>{
+  const btn=$("speedBtn"), out=$("speedOut"); btn.disabled=true; btn.innerHTML='<span class="spin"></span>Testing… (up to a minute)'; out.textContent="";
+  try{const j=await post({action:"aiSpeedTest"});
+    if(j.error==="bad_request") throw new Error("Update your Apps Script first.");
+    if(j.error) throw new Error(j.message||"The speed test didn't work.");
+    const ok=j.results.filter(r=>r.ok).sort((a,b)=>a.ms-b.ms), bad=j.results.filter(r=>!r.ok);
+    out.innerHTML=(ok.length?`<b style="color:var(--ink)">Now using ${esc(ok[0].model)}</b><br>`:"")+ok.map(r=>`${esc(r.model)}: ${(r.ms/1000).toFixed(1)}s`).join("<br>")+(bad.length?`<br>Not available right now: ${bad.map(r=>esc(r.model)).join(", ")}`:"");
+  }catch(e){out.textContent=e.message}
+  finally{btn.disabled=false;btn.textContent="Run speed test"}
+};
 
 const MAXMB=25;
 function readB64(file){return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result));fr.onerror=()=>rej(new Error("Couldn't read that file."));fr.readAsDataURL(file)})}
