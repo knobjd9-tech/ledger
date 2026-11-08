@@ -450,7 +450,7 @@ const cache=()=>lsSet(LS,{recipes,grocery});
 let toastT;
 function toast(msg,action,fn){const t=$("toast");t.textContent=msg;
   if(action){const b=document.createElement("button");b.type="button";b.className="toastbtn";b.textContent=action;b.onclick=()=>{t.hidden=true;fn()};t.appendChild(b)}
-  t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,action?5000:3200)}
+  t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,action?5000:Math.min(9000,3200+msg.length*35))}
 
 /* ---------- server ---------- */
 async function post(body,signal){
@@ -847,8 +847,8 @@ async function aiCall(req,parent){
     throw new Error("Lost the connection while the AI was working. Check your signal and try again.");
   }finally{clearTimeout(limit);parent.signal.removeEventListener("abort",onCancel)}
   if(j.error==="bad_request") throw new Error("Update your Apps Script to turn on AI reading.");
-  if(j.error) throw new Error(j.message||"AI couldn't read that.");
-  if(!j.recipe.ingredients.length) throw new Error("AI didn't find a recipe there.");
+  if(j.error){const e=new Error(j.message||"AI couldn't read that."); e.reason=j.reason||(/limit|busy/i.test(j.message||"")?"rate":"other"); throw e}
+  if(!j.recipe.ingredients.length){const e=new Error("No recipe found in that."); e.reason="none"; throw e}
   return tidyTags(j.recipe);
 }
 const newRecipe=extra=>Object.assign({id:"r"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),added:new Date().toISOString(),fav:false,cooked:[],url:"",video:"",image:""},extra);
@@ -871,7 +871,7 @@ async function scanOne(files,merge,extra){
       const req={files:prepped.map(x=>({data:x.data,mime:x.mime}))};
       if(extra.url) req.url=extra.url; if(extra.text) req.text=extra.text;
       if(extra.captionChecked){req.captionChecked=true; req.caption=extra.caption||"";}
-      const r=await aiCall(req,ctl);
+      let r; try{r=await aiCall(req,ctl)}catch(e){ if(e.reason!=="rate"&&e.reason!=="busy") throw e; $("busySub").textContent="Google asked us to slow down. Trying again in a few seconds…"; await sleep(10000); r=await aiCall(req,ctl) }
       const thumb=(prepped.find(x=>x.thumb)||{}).thumb||r.postImage||""; delete r.postImage;
       if(merge&&draft) mergeIntoDraft(r,thumb); else openEdit(newRecipe(Object.assign({image:thumb},r)),true);
     });
@@ -879,32 +879,50 @@ async function scanOne(files,merge,extra){
   }catch(e){toast(e.message);return false}
 }
 /* several files -> one recipe each, saved straight to your list */
-const PARALLEL=3;   // how many files the AI reads at once (Google's free plan allows a handful of requests per minute)
+const PARALLEL=3;   // how many files the AI reads at once; drops to 1 if Google says "too many requests"
+const sleep=ms=>new Promise(z=>setTimeout(z,ms));
+const REASON={rate:"Google's per-minute limit",busy:"Google was busy",none:"no recipe found",other:"couldn't be read"};
 async function scanMany(files){
-  const done=[], failed=[]; let next=0, working=0, stopped=false;
+  const done=[], failed=[]; let next=0, working=0, stopped=false, limit=PARALLEL, waiting=0;
   const show=()=>{$("busyTitle").textContent=`Read ${done.length+failed.length} of ${files.length}…`;
-    $("busySub").dataset.fixed="1"; $("busySub").textContent=`${done.length} saved${failed.length?`, ${failed.length} couldn't be read`:""} · reading ${working} at a time`};
+    $("busySub").dataset.fixed="1";
+    $("busySub").textContent=`${done.length} saved${failed.length?`, ${failed.length} couldn't be read`:""}`+(waiting?` · Google asked us to slow down, waiting ${waiting}s…`:` · reading ${working} at a time`)};
   try{
     await withBusy("Importing recipes…",async ctl=>{
       show();
       const worker=async()=>{
         while(next<files.length&&!ctl.signal.aborted){
+          if(working>=limit){await sleep(400);continue}
           const f=files[next++]; working++; show();
           try{
-            const x=await prepFile(f,true);
-            let r; try{r=await aiCall({files:[{data:x.data,mime:x.mime}]},ctl)}
-            catch(e){ if(/busy|limit/i.test(e.message)&&!ctl.signal.aborted){await new Promise(z=>setTimeout(z,6000)); r=await aiCall({files:[{data:x.data,mime:x.mime}]},ctl)} else throw e }
-            const rec=newRecipe(Object.assign({image:x.thumb||""},r)); delete rec.byAI; delete rec.partial;
+            const x=await prepFile(f,true), req={files:[{data:x.data,mime:x.mime}]};
+            let r=null;
+            for(let attempt=1;;attempt++){
+              try{r=await aiCall(req,ctl);break}
+              catch(e){
+                if(e.message==="Cancelled."||!(e.reason==="rate"||e.reason==="busy")||attempt>3) throw e;
+                limit=1;                                   // slow down: one at a time from here on
+                for(waiting=12*attempt;waiting>0&&!ctl.signal.aborted;waiting--){show();await sleep(1000)}
+                show();
+              }
+            }
+            const rec=newRecipe(Object.assign({image:x.thumb||""},r)); delete rec.byAI; delete rec.partial; delete rec.aiModel; delete rec.aiSeconds;
             recipes.unshift(rec); cache(); enqueue({action:"saveRecipe",recipe:rec}); renderList(); done.push(rec.title);
-          }catch(e){ if(e.message==="Cancelled.") throw e; failed.push(f.name+": "+e.message) }
+          }catch(e){ if(e.message==="Cancelled.") throw e; failed.push({file:f,why:REASON[e.reason]||e.message}) }
           finally{ working--; show() }
         }
       };
       await Promise.all(Array.from({length:Math.min(PARALLEL,files.length)},worker));
     });
-  }catch(e){ if(e.message!=="Cancelled.") failed.push(e.message); else stopped=true }
-  const msg=(stopped?"Stopped. ":"")+`Imported ${done.length} of ${files.length} recipe${files.length===1?"":"s"}.`+(done.length?" Open each one to check the amounts.":"");
-  toast(failed.length?msg+" Couldn't read: "+failed.map(f=>f.split(":")[0]).join(", "):msg);
+  }catch(e){ if(e.message==="Cancelled.") stopped=true; else failed.push({file:null,why:e.message}) }
+  // anything not imported goes back into the Add a recipe box, ready to try again
+  const retry=failed.filter(x=>x.file).map(x=>x.file).concat(stopped?files.slice(next):[]);
+  if(retry.length){attached=retry;renderAttached()}
+  let msg=(stopped?"Stopped. ":"")+`Imported ${done.length} of ${files.length}.`;
+  if(failed.length){const why={};failed.forEach(x=>why[x.why]=(why[x.why]||0)+1);msg+=" Not added: "+Object.entries(why).map(([w,n])=>`${n} (${w})`).join(", ")+"."}
+  if(retry.length) msg+=` ${retry.length} still attached above. Tap Import to try again.`;
+  else if(done.length) msg+=" Open each one to check the amounts.";
+  toast(msg);
 }
 async function runAI(req,merge){   // YouTube link from the review screen
   try{await withBusy("AI is watching the video…",async ctl=>{const r=await aiCall(req,ctl); if(merge&&draft) mergeIntoDraft(r,""); else openEdit(newRecipe(r),true)})}
