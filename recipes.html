@@ -522,11 +522,14 @@ const DENS=[[/brown sugar/,0.93],[/powdered sugar|confectioners|icing sugar/,0.5
   [/dried oregano|dried thyme|dried basil|italian seasoning|dried parsley|dried rosemary|oregano|thyme/,0.2],
   [/black pepper|ground pepper|pepper(?!s| flakes)/,0.47],[/red pepper flakes|chili flakes/,0.35],
   [/cumin|paprika|cinnamon|chili powder|chile powder|garlic powder|onion powder|turmeric|ground ginger|nutmeg|cayenne|curry powder|coriander|allspice|cloves ground|mustard powder/,0.55],[/baking soda|baking powder/,0.9],[/protein powder/,0.42]];
-const UNITRE=/^\s*(cups?|c\.(?=\s)|tablespoons?|tbsps?|tbs|tbl|T(?=\s)|teaspoons?|tsps?|t(?=\s)|fluid ounces?|fl\.?\s*oz|ounces?|oz|pounds?|lbs?|pints?|pts?|quarts?|qts?|gallons?|gal)\.?(?=[\s,(]|$)/;
+const UNIT_CI=/^\s*(cups?|c\.(?=\s)|tablespoons?|tbsps?|tbs|tbl|teaspoons?|tsps?|fluid ounces?|fl\.?\s*oz|ounces?|oz|pounds?|lbs?|pints?|pts?|quarts?|qts?|gallons?|gal)\.?(?=[\s,(]|$)/i;
+const UNIT_T=/^\s*(T|t)\.?(?=\s)/;
 function unitKey(u){u=u.replace(/\.$/,"");
-  if(/^(cups?|c)$/i.test(u)) return "cup";
-  if(/^(tablespoons?|tbsps?|tbs|tbl|T)$/.test(u)) return "tbsp";
-  if(/^(teaspoons?|tsps?|t)$/.test(u)) return "tsp";
+  if(u==="T") return "tbsp"; if(u==="t") return "tsp";
+  u=u.toLowerCase();
+  if(/^(cups?|c)$/.test(u)) return "cup";
+  if(/^(tablespoons?|tbsps?|tbs|tbl)$/.test(u)) return "tbsp";
+  if(/^(teaspoons?|tsps?)$/.test(u)) return "tsp";
   if(/fl/i.test(u)) return "floz";
   if(/^(ounces?|oz)$/i.test(u)) return "oz";
   if(/^(pounds?|lbs?)$/i.test(u)) return "lb";
@@ -538,7 +541,7 @@ function metricLine(line,f){
   const s=line.trim(), m=s.match(NUMRE); if(!m) return {q:"",rest:s};
   let rest=s.slice(m[0].length), n=toNum(m[0])*f, n2=null;
   const r=rest.match(/^\s*(?:-|–|to)\s*(\d+\/\d+|\d*\.\d+|\d+)/); if(r){n2=toNum(r[1])*f;rest=rest.slice(r[0].length)}
-  const u=rest.match(UNITRE); if(!u) return scaleLine(line,f);
+  const u=rest.match(UNIT_CI)||rest.match(UNIT_T); if(!u) return scaleLine(line,f);
   const key=unitKey(u[1]); if(!key) return scaleLine(line,f);
   const after=rest.slice(u[0].length), name=after.toLowerCase();
   const orig=fmt(n)+(n2!=null?"–"+fmt(n2):"")+" "+u[1].replace(/\.$/,"");
@@ -552,7 +555,14 @@ function metricLine(line,f){
   if(/juice|wine|vinegar|sauce|soy|beer|coffee|tea\b|liquid|puree|purée/.test(name)) return show(x=>x*ML[key],"ml");
   return scaleLine(line,f);   // spices and things we can't weigh reliably stay as written
 }
-const lineFor=(l,f)=>metricLine(l,f);   // grams first, original amount alongside when they differ
+function amountFirst(l){
+  if(NUMRE.test(String(l).trim())) return l;
+  const m=String(l).match(/^(.*?\S)\s*(?:[-–—:,]|\s)\s*((?:\d+\s+\d+\/\d+|\d+\/\d+|\d*\.\d+|\d+|[¼½¾⅓⅔⅛])(?:\s*(?:-|–|to)\s*\d+(?:\/\d+)?)?\s*(?:[a-zA-Z.]+)?)\s*$/);
+  if(!m) return l;
+  const amt=m[2].trim(); if(!(UNIT_CI.test(amt.replace(NUMRE,"").trim()+" ")||UNIT_T.test(amt.replace(NUMRE,"")+" ")||/^\S+$/.test(amt))) return l;
+  return amt+" "+m[1].trim();
+}
+const lineFor=(l,f)=>metricLine(amountFirst(l),f);   // grams first, original amount alongside when they differ
 const stepFor=t=>t;   // temperatures stay in °F
 
 /* ---------- list ---------- */
