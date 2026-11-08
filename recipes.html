@@ -175,6 +175,9 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .lt b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lt span{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .linkedit{background:none;border:0;color:var(--accent);font-weight:600;font-size:13px}
+.choice{display:grid;gap:2px;text-align:left;width:100%;padding:12px 14px;white-space:normal}
+#multi .busycard{width:min(360px,100%);justify-items:stretch;text-align:center}
+.choice span{font-size:12px;font-weight:400;opacity:.85}
 </style>
 </head>
 <body>
@@ -187,7 +190,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
         <button type="button" data-v="list"><b>Recipes</b><span>Find, cook and add recipes</span></button>
         <button type="button" data-v="grocery"><b>Grocery list</b><span id="menuGroc">Ingredients for the store</span></button>
         <hr>
-        <button type="button" id="aiMenu"><b>AI video reading</b><span id="aiMenuSub">Set up your free Gemini key</span></button>
+        <button type="button" id="aiMenu"><b>AI reading</b><span id="aiMenuSub">Set up your free Gemini key</span></button>
         <hr>
         <a href="./"><b>Daily Ledger ↗</b><span>Back to your habits</span></a>
       </div>
@@ -202,7 +205,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
         <input id="importUrl" class="field" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste a recipe link">
         <button type="submit" class="btn primary" id="importBtn">Import</button>
       </div>
-      <div class="row upl"><span class="src">or</span><label class="btn" for="vidFile" id="vidLabel">Upload a cooking video</label><input id="vidFile" type="file" accept="video/*" hidden><span class="src" id="aiHint"></span></div>
+      <div class="row upl"><span class="src">or</span><label class="btn" for="vidFile" id="vidLabel">Scan photos or videos</label><input id="vidFile" type="file" accept="image/*,video/*" multiple hidden><span class="src" id="aiHint"></span></div>
       <div class="err" id="importErr" hidden></div>
     </form>
     <input id="search" class="field" type="search" placeholder="Search recipes or ingredients" autocomplete="off" aria-label="Search recipes">
@@ -283,14 +286,14 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 </section>
 
 <!-- AI SETUP -->
-<section class="sheet" id="aiSheet" hidden aria-label="AI video reading">
-  <div class="sheetbar"><button type="button" class="iconbtn" id="aiBack">&larr; Recipes</button><b>AI video reading</b><span style="width:60px"></span></div>
+<section class="sheet" id="aiSheet" hidden aria-label="AI reading">
+  <div class="sheetbar"><button type="button" class="iconbtn" id="aiBack">&larr; Recipes</button><b>AI reading</b><span style="width:60px"></span></div>
   <div class="sheetbody">
     <div class="notice" id="aiState"></div>
     <div class="panel">
       <h3>What it does</h3>
-      <p style="margin:0">Google's Gemini AI watches a cooking video, listening to what's said and reading what's on screen, then writes out the recipe with amounts, steps and estimated macros.</p>
-      <ul style="margin:0;padding-left:18px;display:grid;gap:4px"><li><b>YouTube:</b> paste the link. If the description has no recipe, AI watches it automatically.</li><li><b>TikTok / Instagram:</b> save the video to your phone, then tap <b>Upload a cooking video</b>.</li></ul>
+      <p style="margin:0">Google's Gemini AI reads cooking videos and photos of recipes (cookbook pages, recipe cards, screenshots), then writes out the recipe with amounts, steps and estimated macros.</p>
+      <ul style="margin:0;padding-left:18px;display:grid;gap:4px"><li><b>YouTube:</b> paste the link. If the description has no recipe, AI watches it automatically.</li><li><b>TikTok / Instagram:</b> save the video to your phone, then tap <b>Scan photos or videos</b>.</li><li><b>Cookbooks and recipe cards:</b> tap <b>Scan photos or videos</b> and take a photo. Pick several to scan more than one page or recipe at once.</li></ul>
     </div>
     <div class="panel">
       <h3>Get your free key (2 minutes)</h3>
@@ -307,6 +310,12 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
   </div>
 </section>
 
+<div class="busy" id="multi" hidden role="dialog" aria-label="How to import these files"><div class="busycard" style="max-width:360px;gap:10px">
+  <b style="font-size:17px">What are these?</b><span class="src" id="multiCount"></span>
+  <button type="button" class="btn primary choice" id="mOne"><b>One recipe</b><span>Pages or screenshots of the same recipe, or a video plus photos</span></button>
+  <button type="button" class="btn choice" id="mMany"><b>Separate recipes</b><span>One recipe per file, saved straight to your list</span></button>
+  <button type="button" class="btn" id="mCancel" style="background:none;border:0;color:var(--muted)">Cancel</button>
+</div></div>
 <div class="busy" id="busy" hidden role="status"><div class="busycard"><span class="spin" style="width:22px;height:22px"></span><b id="busyTitle">AI is watching the video…</b><span class="num" id="busyTime">0:00</span><span class="src" id="busySub">Usually 30 seconds to 2 minutes. Keep the app open and your screen on.</span><button type="button" class="btn" id="busyCancel">Cancel</button></div></div>
 
 <!-- COOKING MODE -->
@@ -589,9 +598,9 @@ $("importForm").addEventListener("submit",async e=>{
 /* ---------- AI video reading ---------- */
 function renderAi(){
   $("aiMenuSub").textContent=aiReady?"On · Gemini is set up":"Set up your free Gemini key";
-  $("aiHint").textContent=aiReady?"AI watches it and writes the recipe":"needs your free AI key (menu)";
+  $("aiHint").textContent=aiReady?"cookbook pages, cards, screenshots, videos":"needs your free AI key (menu)";
   $("aiState").className="notice"+(aiReady?"":" warn");
-  $("aiState").textContent=aiReady?"AI video reading is on.":"AI video reading is off. Add your free key below to turn it on.";
+  $("aiState").textContent=aiReady?"AI reading is on.":"AI reading is off. Add your free key below to turn it on.";
   $("aiRemove").hidden=!aiReady;
 }
 $("aiMenu").onclick=()=>{closeMenu();renderAi();$("aiSheet").hidden=false};
@@ -601,7 +610,7 @@ async function saveKey(k){
   try{const j=await post({action:"setAiKey",aiKey:k});
     if(j.error==="bad_request") throw new Error("Update your Apps Script first, then try again.");
     if(j.error) throw new Error(j.message||"That key didn't work.");
-    aiReady=!!j.aiReady; lsSet(LS+".ai",aiReady); $("aiKey").value=""; renderAi(); toast(aiReady?"AI video reading is on.":"Key removed.");
+    aiReady=!!j.aiReady; lsSet(LS+".ai",aiReady); $("aiKey").value=""; renderAi(); toast(aiReady?"AI reading is on.":"Key removed.");
   }catch(e){err.textContent=e.message;err.hidden=false}
   finally{$("aiSave").disabled=false;$("aiSave").textContent="Save key"}
 }
@@ -617,48 +626,108 @@ function frameOf(file){return new Promise(res=>{
     v.onseeked=()=>{try{const w=320,h=Math.round(w*v.videoHeight/v.videoWidth)||480;const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(v,0,0,w,h);done(c.toDataURL("image/jpeg",.55))}catch(e){done("")}};
     v.onerror=()=>done(""); setTimeout(()=>done(""),6000);
   }catch(e){res("")}})}
+/* photos are shrunk before sending (faster, and well within Google's limits); videos go as they are */
+function shrinkImage(file,max,q){return new Promise(res=>{
+  const img=new Image(); img.onload=()=>{const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);
+    c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);res(c.toDataURL("image/jpeg",q))};
+  img.onerror=()=>res(""); img.src=URL.createObjectURL(file)})}
+async function prepFile(f){
+  if(/^image\//.test(f.type)||/\.(heic|heif|jpe?g|png|webp)$/i.test(f.name)){
+    const data=await shrinkImage(f,1600,.82); if(!data) throw new Error(`Couldn't open the photo “${f.name}”.`);
+    return {data,mime:"image/jpeg",thumb:await shrinkImage(f,320,.55),size:data.length*.75};
+  }
+  if(f.size>MAXMB*1024*1024) throw new Error(`“${f.name}” is ${Math.round(f.size/1048576)} MB. Trim videos under ${MAXMB} MB (about a minute).`);
+  const [data,thumb]=await Promise.all([readB64(f),frameOf(f)]);
+  return {data,mime:f.type||"video/mp4",thumb,size:f.size};
+}
+function tidyTags(r){const t=new Set((r.tags||[]).filter(x=>PRESET_TAGS.includes(x))); if((r.nutrition||{}).protein>=30)t.add("High protein"); if(r.time&&r.time<=30)t.add("Quick"); r.tags=[...t]; return r}
+
+/* picking files: one file, several for one recipe, or several separate recipes */
+let pendingFiles=null, pendingMerge=false;
 async function pickVideo(input,merge){
-  const f=input.files&&input.files[0]; input.value=""; if(!f) return;
+  const files=[...(input.files||[])].slice(0,10); input.value=""; if(!files.length) return;
   if(!aiReady){$("aiSheet").hidden=false;renderAi();toast("Add your free AI key first.");return}
-  if(f.size>MAXMB*1024*1024){toast(`That video is ${Math.round(f.size/1048576)} MB. Trim it under ${MAXMB} MB (about a minute) and try again.`);return}
-  const [data,frame]=await Promise.all([readB64(f),frameOf(f)]);
-  runAI({data,mime:f.type||"video/mp4"},merge,frame);
+  if(files.length===1||merge){scanOne(files,merge);return}
+  pendingFiles=files; $("multiCount").textContent=`${files.length} files selected`; $("multi").hidden=false;
 }
 $("vidFile").onchange=e=>pickVideo(e.target,false);
+$("mOne").onclick=()=>{$("multi").hidden=true;scanOne(pendingFiles,false);pendingFiles=null};
+$("mMany").onclick=()=>{$("multi").hidden=true;scanMany(pendingFiles);pendingFiles=null};
+$("mCancel").onclick=()=>{$("multi").hidden=true;pendingFiles=null};
+
 const AI_LIMIT=5*60*1000;   // Google's script runner stops at 6 minutes, so give up a little before
 let aiCtl=null;
 $("busyCancel").onclick=()=>{if(aiCtl)aiCtl.abort("cancel")};
-async function runAI(req,merge,frame){
-  $("busyTitle").textContent="AI is watching the video…"; $("busy").hidden=false;
+/** Shows the waiting screen around work(signal). */
+async function withBusy(title,work){
+  $("busyTitle").textContent=title; $("busy").hidden=false;
   aiCtl=new AbortController(); const ctl=aiCtl, t0=Date.now();
-  const tick=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);$("busyTime").textContent=Math.floor(s/60)+":"+pad(s%60);
-    if(s>90)$("busySub").textContent="Taking longer than usual. Google's AI may be busy. Keep the app open.";},1000);
-  const limit=setTimeout(()=>ctl.abort("timeout"),AI_LIMIT);
-  let lock=null; try{lock=await navigator.wakeLock.request("screen")}catch(e){}
   $("busyTime").textContent="0:00"; $("busySub").textContent="Usually 30 seconds to 2 minutes. Keep the app open and your screen on.";
+  const tick=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);$("busyTime").textContent=Math.floor(s/60)+":"+pad(s%60);
+    if(s>90&&!$("busySub").dataset.fixed)$("busySub").textContent="Taking longer than usual. Google's AI may be busy. Keep the app open.";},1000);
+  let lock=null; try{lock=await navigator.wakeLock.request("screen")}catch(e){}
+  try{return await work(ctl)}
+  finally{$("busy").hidden=true;clearInterval(tick);aiCtl=null;delete $("busySub").dataset.fixed;try{lock&&lock.release()}catch(e){}}
+}
+/** One AI request (YouTube link, or a list of prepared files) -> recipe. */
+async function aiCall(req,ctl){
+  const limit=setTimeout(()=>ctl.abort("timeout"),AI_LIMIT);
+  let j;
+  try{j=await post(Object.assign({action:"aiVideo"},req),ctl.signal)}
+  catch(e){
+    if(ctl.signal.aborted&&ctl.signal.reason==="cancel") throw new Error("Cancelled.");
+    if(ctl.signal.aborted) throw new Error("That took too long. Google's AI may be busy. Try again in a few minutes, or use a shorter clip.");
+    throw new Error("Lost the connection while the AI was working. Check your signal and try again.");
+  }finally{clearTimeout(limit)}
+  if(j.error==="bad_request") throw new Error("Update your Apps Script to turn on AI reading.");
+  if(j.error) throw new Error(j.message||"AI couldn't read that.");
+  if(!j.recipe.ingredients.length) throw new Error("AI didn't find a recipe there.");
+  return tidyTags(j.recipe);
+}
+const newRecipe=extra=>Object.assign({id:"r"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),added:new Date().toISOString(),fav:false,cooked:[],url:"",video:"",image:""},extra);
+function mergeIntoDraft(r,thumb){
+  const keep={id:draft.id,added:draft.added,video:draft.video,url:draft.url,image:draft.image||thumb||"",fav:draft.fav,cooked:draft.cooked};
+  draft=Object.assign({},draft,r,keep,{title:r.title||draft.title,notes:[draft.notes,r.notes].filter(Boolean).join(" "),fromVideo:true});
+  openEdit(draft,true);
+}
+/* several files (or one) -> one recipe, then the review screen */
+async function scanOne(files,merge){
   try{
-    let j;
-    try{j=await post(Object.assign({action:"aiVideo"},req),ctl.signal)}
-    catch(e){
-      if(ctl.signal.aborted&&ctl.signal.reason==="cancel") throw new Error("Cancelled.");
-      if(ctl.signal.aborted) throw new Error("That took too long. Google's AI may be busy. Try again in a few minutes, or use a shorter clip.");
-      throw new Error("Lost the connection while the AI was working. Check your signal and try again.");
-    }
-    if(j.error==="bad_request") throw new Error("Update your Apps Script to turn on AI video reading.");
-    if(j.error) throw new Error(j.message||"AI couldn't read that video.");
-    const r=j.recipe;
-    if(!r.ingredients.length) throw new Error("AI didn't find a recipe in that video.");
-    const t=new Set((r.tags||[]).filter(x=>PRESET_TAGS.includes(x))); if((r.nutrition||{}).protein>=30)t.add("High protein"); if(r.time&&r.time<=30)t.add("Quick"); r.tags=[...t];
-    if(merge&&draft){
-      const keep={id:draft.id,added:draft.added,video:draft.video,url:draft.url,image:draft.image||frame||"",fav:draft.fav,cooked:draft.cooked};
-      const notes=[draft.notes,r.notes].filter(Boolean).join(" ");
-      draft=Object.assign({},draft,r,keep,{title:r.title||draft.title,notes,fromVideo:true});
-      openEdit(draft,true);
-    }else{
-      openEdit(Object.assign({id:"r"+Date.now().toString(36),added:new Date().toISOString(),fav:false,cooked:[],url:"",video:"",image:frame||""},r),true);
-    }
+    await withBusy(files.length>1?`AI is reading ${files.length} files…`:(/^video/.test(files[0].type)?"AI is watching the video…":"AI is reading the photo…"),async ctl=>{
+      $("busySub").textContent="Getting your files ready…";
+      const prepped=[]; for(const f of files) prepped.push(await prepFile(f));
+      const total=prepped.reduce((a,x)=>a+x.size,0);
+      if(total>MAXMB*1024*1024) throw new Error(`Those files add up to ${Math.round(total/1048576)} MB. Keep it under ${MAXMB} MB together, or import them as separate recipes.`);
+      $("busySub").textContent="Usually 30 seconds to 2 minutes. Keep the app open and your screen on.";
+      const r=await aiCall({files:prepped.map(x=>({data:x.data,mime:x.mime}))},ctl);
+      const thumb=(prepped.find(x=>x.thumb)||{}).thumb||"";
+      if(merge&&draft) mergeIntoDraft(r,thumb); else openEdit(newRecipe(Object.assign({image:thumb},r)),true);
+    });
   }catch(e){toast(e.message)}
-  finally{$("busy").hidden=true;clearInterval(tick);clearTimeout(limit);aiCtl=null;try{lock&&lock.release()}catch(e){}}
+}
+/* several files -> one recipe each, saved straight to your list */
+async function scanMany(files){
+  const done=[], failed=[];
+  try{
+    await withBusy("Importing recipes…",async ctl=>{
+      for(let i=0;i<files.length;i++){
+        $("busyTitle").textContent=`Reading ${i+1} of ${files.length}…`;
+        $("busySub").dataset.fixed="1"; $("busySub").textContent=files[i].name+(done.length?` · ${done.length} saved so far`:"");
+        try{
+          const x=await prepFile(files[i]);
+          const r=await aiCall({files:[{data:x.data,mime:x.mime}]},ctl);
+          const rec=newRecipe(Object.assign({image:x.thumb||""},r)); delete rec.byAI; delete rec.partial;
+          recipes.unshift(rec); cache(); enqueue({action:"saveRecipe",recipe:rec}); renderList(); done.push(rec.title);
+        }catch(e){ if(e.message==="Cancelled.") throw e; failed.push(files[i].name+": "+e.message) }
+      }
+    });
+  }catch(e){ if(e.message!=="Cancelled.") failed.push(e.message) }
+  const msg=`Imported ${done.length} of ${files.length} recipe${files.length===1?"":"s"}.`+(done.length?" Open each one to check the amounts.":"");
+  toast(failed.length?msg+" Couldn't read: "+failed.map(f=>f.split(":")[0]).join(", "):msg);
+}
+async function runAI(req,merge){   // YouTube link from the review screen
+  try{await withBusy("AI is watching the video…",async ctl=>{const r=await aiCall(req,ctl); if(merge&&draft) mergeIntoDraft(r,""); else openEdit(newRecipe(r),true)})}
+  catch(e){toast(e.message)}
 }
 
 /* ---------- links ---------- */
@@ -750,8 +819,8 @@ function openEdit(r,isNew){
   $("eIng").value=(r.ingredients||[]).join("\n"); $("eSteps").value=(r.steps||[]).join("\n");
   $("eNotes").value=r.notes||""; $("eLinks").value=(r.links||[]).map(l=>(l.label&&l.label!==hostOf(l.url)?l.label+" ":"")+l.url).join("\n"); $("eImg").value=String(r.image||"").startsWith("data:")?"":(r.image||""); $("eImg").placeholder=String(r.image||"").startsWith("data:")?"Using a frame from the video":""; $("eUrl").value=r.url||""; $("eVideo").value=r.video||"";
   let note="";
-  const v=videoInfo(r.video), aiBtn=(r.fromVideo&&v)?(v.kind==="YouTube"?'<button type="button" class="btn primary" id="eAI">Have AI watch the video</button>':`<label class="btn primary" for="vidFile2">Upload the video for AI</label><input id="vidFile2" type="file" accept="video/*" hidden><div class="src" style="margin-top:6px">Save it first: in ${v.kind}, tap Share → ${v.kind==="TikTok"?"Save video":"screen record the reel"}.</div>`):"";
-  if(isNew&&r.byAI) note=`<div class="notice">AI watched the video and wrote this out. Amounts marked "(est.)" were guessed${r.nutritionEstimated?", and the macros are AI estimates. Swap in Lose It's numbers if they differ":""}. Check it over, then Save.</div>`;
+  const v=videoInfo(r.video), aiBtn=(r.fromVideo&&v)?(v.kind==="YouTube"?'<button type="button" class="btn primary" id="eAI">Have AI watch the video</button>':`<label class="btn primary" for="vidFile2">Upload the video or screenshots for AI</label><input id="vidFile2" type="file" accept="image/*,video/*" multiple hidden><div class="src" style="margin-top:6px">Save it first: in ${v.kind}, tap Share → ${v.kind==="TikTok"?"Save video":"screen record the reel"}.</div>`):"";
+  if(isNew&&r.byAI) note=`<div class="notice">AI read this and wrote it out. Amounts marked "(est.)" were guessed${r.nutritionEstimated?", and the macros are AI estimates. Swap in Lose It's numbers if they differ":""}. Check it over, then Save.</div>`;
   else if(isNew&&r.partial&&r.fromVideo) note='<div class="notice warn">Saved the video, but its caption has no recipe to read. Let AI watch it instead, or fill in what you need.'+aiBtn+'</div>';
   else if(isNew&&r.partial) note='<div class="notice warn">This site doesn\'t share its recipe in a readable format, so fill in what you need. Tip: Lose It\'s importer may still read it.</div>';
   else if(isNew&&r.fromVideo&&!isVideo(r.url)){let h="";try{h=new URL(r.url).hostname.replace(/^www\./,"")}catch(e){}note=`<div class="notice">Found the written recipe on ${esc(h||"the creator's site")} from the video's caption${(r.nutrition||{}).calories!=null?", with nutrition":""}. The video is saved too. Check it over, add tags, then Save.</div>`}
