@@ -196,6 +196,16 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
   #printArea .plinks{font-size:9pt;word-break:break-all;color:#333}
   @page{margin:14mm}
 }
+.crop{z-index:45}
+.cropbody{max-width:720px;margin:0 auto;padding:20px 16px;display:grid;gap:14px}
+.cropbox{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;border-radius:12px;background:#000;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.cropbox:active{cursor:grabbing}
+.cropbox img{position:absolute;left:50%;top:50%;max-width:none;transform-origin:center;pointer-events:none;-webkit-user-drag:none}
+.cropgrid{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 2px rgba(255,255,255,.85);border-radius:12px;
+  background:linear-gradient(to right,transparent 33.2%,rgba(255,255,255,.35) 33.3%,rgba(255,255,255,.35) 33.5%,transparent 33.6%,transparent 66.5%,rgba(255,255,255,.35) 66.6%,rgba(255,255,255,.35) 66.8%,transparent 66.9%),
+  linear-gradient(to bottom,transparent 33.2%,rgba(255,255,255,.35) 33.3%,rgba(255,255,255,.35) 33.5%,transparent 33.6%,transparent 66.5%,rgba(255,255,255,.35) 66.6%,rgba(255,255,255,.35) 66.8%,transparent 66.9%)}
+.cropctl{flex-wrap:nowrap}
+.cropctl input{flex:1;accent-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -299,7 +309,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
     <div class="coverbox">
       <div class="lbl">Cover photo</div>
       <div class="coverprev" id="ePrev"></div>
-      <div class="row"><label class="btn" for="eCoverFile">Choose or take a photo</label><input id="eCoverFile" type="file" accept="image/*" hidden><button type="button" class="btn danger" id="eCoverRemove">Remove photo</button></div>
+      <div class="row"><label class="btn" for="eCoverFile">Choose or take a photo</label><button type="button" class="btn" id="eCoverAdjust">Crop / adjust</button><input id="eCoverFile" type="file" accept="image/*" hidden><button type="button" class="btn danger" id="eCoverRemove">Remove photo</button></div>
       <label for="eImg">Or paste a photo link<input id="eImg" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…"></label>
     </div>
     <label for="eVideo">Video link: YouTube, TikTok or Instagram (optional)<input id="eVideo" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…"></label>
@@ -362,6 +372,15 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
   </div>
 </section>
 
+<section class="sheet crop" id="crop" hidden aria-label="Crop photo">
+  <div class="sheetbar"><button type="button" class="iconbtn" id="cropCancel">Cancel</button><b>Crop photo</b><button type="button" class="iconbtn" id="cropUse" style="background:var(--accent);border-color:var(--accent);color:var(--on-accent)">Use photo</button></div>
+  <div class="cropbody">
+    <div class="cropbox" id="cropBox"><img id="cropImg" alt="" draggable="false"><div class="cropgrid" aria-hidden="true"></div></div>
+    <div class="src" style="text-align:center">Drag to move · pinch or use the slider to zoom</div>
+    <div class="row cropctl"><span class="src">−</span><input type="range" id="cropZoom" min="1" max="5" step="0.01" value="1" aria-label="Zoom"><span class="src">+</span></div>
+    <div class="row" style="justify-content:center"><button type="button" class="btn" id="cropRotate">Rotate ↻</button><button type="button" class="btn" id="cropReset">Reset</button></div>
+  </div>
+</section>
 <div class="toast" id="toast" role="status" hidden></div>
 <div id="printArea" aria-hidden="true"></div>
 
@@ -779,25 +798,78 @@ function linksPanel(r){
 
 /* ---------- cover photos ---------- */
 // Photos you add are cropped to the card shape and kept small enough to fit in one Sheet cell.
-function coverFromFile(file){return new Promise((res,rej)=>{
-  const img=new Image();
-  img.onload=()=>{URL.revokeObjectURL(img.src);
-    const W=img.naturalWidth,H=img.naturalHeight,ar=16/10; let sw=W,sh=W/ar; if(sh>H){sh=H;sw=H*ar}
-    const sx=(W-sw)/2, sy=(H-sh)/2;
-    for(const [w,q] of [[800,.72],[720,.66],[640,.62],[560,.58],[480,.55],[400,.5]]){
-      const c=document.createElement("canvas");c.width=w;c.height=Math.round(w/ar);
-      c.getContext("2d").drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
-      const d=c.toDataURL("image/jpeg",q); if(d.length<45000) return res(d);
-    }
-    rej(new Error("That photo couldn't be made small enough. Try another one."))};
-  img.onerror=()=>rej(new Error("Couldn't open that photo.")); img.src=URL.createObjectURL(file)})}
+/* crop + resize: drag to move, pinch / slider / scroll to zoom, rotate in 90° steps */
+const AR=16/10;
+let crop=null;
+function openCropper(src){return new Promise((resolve,reject)=>{
+  const img=new Image(); img.crossOrigin="anonymous";
+  img.onload=()=>{crop={img,rot:0,z:1,x:0,y:0,resolve};$("crop").hidden=false;cropLayout();
+    try{navigator.vibrate&&navigator.vibrate(5)}catch(e){}};
+  img.onerror=()=>reject(new Error("Couldn't open that photo."));
+  img.src=src;
+})}
+const cropBox=()=>$("cropBox").getBoundingClientRect();
+function baseSize(){ // image size (after rotation) at zoom 1, scaled so it just covers the frame
+  const r=crop.rot%180!==0, iw=r?crop.img.naturalHeight:crop.img.naturalWidth, ih=r?crop.img.naturalWidth:crop.img.naturalHeight;
+  const bw=cropBox().width, bh=bw/AR, k=Math.max(bw/iw,bh/ih); return {w:iw*k,h:ih*k,bw,bh,iw,ih};
+}
+function clampCrop(){const s=baseSize(), w=s.w*crop.z, h=s.h*crop.z;
+  crop.x=Math.min((w-s.bw)/2,Math.max(-(w-s.bw)/2,crop.x)); crop.y=Math.min((h-s.bh)/2,Math.max(-(h-s.bh)/2,crop.y))}
+function cropLayout(){
+  clampCrop(); const s=baseSize(), el=$("cropImg");
+  if(el.src!==crop.img.src) el.src=crop.img.src;
+  const r=crop.rot%180!==0, dw=(r?s.h:s.w), dh=(r?s.w:s.h);   // drawn size before rotation
+  el.style.width=dw+"px"; el.style.height=dh+"px";
+  el.style.transform=`translate(-50%,-50%) translate(${crop.x}px,${crop.y}px) rotate(${crop.rot}deg) scale(${crop.z})`;
+  $("cropZoom").value=crop.z;
+}
+function cropExport(){
+  const s=baseSize(), scale=s.w*crop.z/s.iw;              // screen px per source px
+  const sw=s.bw/scale, sh=s.bh/scale;                      // crop size in (rotated) source px
+  const cx=s.iw/2-crop.x/scale, cy=s.ih/2-crop.y/scale;    // crop centre in (rotated) source px
+  for(const [w,q] of [[1000,.74],[880,.7],[800,.66],[720,.62],[640,.6],[560,.56],[480,.52],[400,.5]]){
+    const c=document.createElement("canvas"); c.width=w; c.height=Math.round(w/AR); const g=c.getContext("2d");
+    const k=w/sw; g.save(); g.scale(k,k); g.translate(-(cx-sw/2),-(cy-sh/2));
+    g.translate(s.iw/2,s.ih/2); g.rotate(crop.rot*Math.PI/180); g.drawImage(crop.img,-crop.img.naturalWidth/2,-crop.img.naturalHeight/2); g.restore();
+    let d; try{d=c.toDataURL("image/jpeg",q)}catch(e){return null}
+    if(d.length<45000) return d;
+  }
+  return null;
+}
+function closeCrop(val){const c=crop;crop=null;$("crop").hidden=true;$("cropImg").removeAttribute("src");if(c)c.resolve(val)}
+(function cropGestures(){
+  const box=$("cropBox"), pts=new Map(); let start=null;
+  box.addEventListener("pointerdown",e=>{if(!crop)return;box.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    const p=[...pts.values()]; start={x:crop.x,y:crop.y,z:crop.z,p0:p[0],d0:p.length>1?Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y):0}});
+  box.addEventListener("pointermove",e=>{if(!crop||!pts.has(e.pointerId))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});const p=[...pts.values()];
+    if(p.length>1&&start.d0){crop.z=Math.min(5,Math.max(1,start.z*Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)/start.d0))}
+    else{crop.x=start.x+(p[0].x-start.p0.x);crop.y=start.y+(p[0].y-start.p0.y)}
+    cropLayout()});
+  const up=e=>{pts.delete(e.pointerId);if(crop){const p=[...pts.values()];start={x:crop.x,y:crop.y,z:crop.z,p0:p[0],d0:0}}};
+  box.addEventListener("pointerup",up);box.addEventListener("pointercancel",up);
+  box.addEventListener("wheel",e=>{if(!crop)return;e.preventDefault();crop.z=Math.min(5,Math.max(1,crop.z*(e.deltaY<0?1.08:1/1.08)));cropLayout()},{passive:false});
+  $("cropZoom").addEventListener("input",e=>{if(crop){crop.z=Number(e.target.value);cropLayout()}});
+  $("cropRotate").onclick=()=>{if(crop){crop.rot=(crop.rot+90)%360;crop.x=0;crop.y=0;cropLayout()}};
+  $("cropReset").onclick=()=>{if(crop){crop.z=1;crop.x=0;crop.y=0;cropLayout()}};
+  $("cropCancel").onclick=()=>closeCrop(null);
+  $("cropUse").onclick=()=>{const d=cropExport(); if(!d){toast("That photo can't be edited here. Choose it again from your photos.");return} closeCrop(d)};
+  window.addEventListener("resize",()=>{if(crop)cropLayout()});
+})();
+/** Pick -> crop -> small JPEG data URL (or null if cancelled). */
+async function coverFromFile(file){
+  const url=URL.createObjectURL(file);
+  try{return await openCropper(url)}finally{setTimeout(()=>URL.revokeObjectURL(url),1000)}
+}
+
 function renderCoverEdit(){
   const src=$("eImg").value.trim()||draft.image||"";
   $("ePrev").innerHTML=src?`<img src="${esc(src)}" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'src',textContent:'That photo link didn’t load.'}))">`:'<span class="src">No cover photo yet</span>';
   $("eCoverRemove").hidden=!src;
+  $("eCoverAdjust").hidden=!String(draft.image||"").startsWith("data:")||!!$("eImg").value.trim();
 }
 $("eCoverFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
-  try{draft.image=await coverFromFile(f);$("eImg").value="";renderCoverEdit()}catch(err){toast(err.message)}};
+  try{const d=await coverFromFile(f); if(!d)return; draft.image=d;$("eImg").value="";renderCoverEdit()}catch(err){toast(err.message)}};
+$("eCoverAdjust").onclick=async()=>{const d=await openCropper(draft.image).catch(e=>{toast(e.message);return null}); if(d){draft.image=d;renderCoverEdit()}};
 $("eCoverRemove").onclick=()=>{draft.image="";$("eImg").value="";renderCoverEdit()};
 $("eImg").addEventListener("input",()=>{if($("eImg").value.trim())draft.image=$("eImg").value.trim();renderCoverEdit()});
 
@@ -872,7 +944,7 @@ function renderDetail(){
   };
   $("aPdf").onclick=()=>printRecipe(r);
   $("dCoverFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
-    try{r.image=await coverFromFile(f);cache();renderDetail();renderList();enqueue({action:"saveRecipe",recipe:r});toast("Cover photo updated.")}catch(err){toast(err.message)}};
+    try{const d=await coverFromFile(f); if(!d)return; r.image=d;cache();renderDetail();renderList();enqueue({action:"saveRecipe",recipe:r});toast("Cover photo updated.")}catch(err){toast(err.message)}};
   $("aLoseIt").onclick=async()=>{
     if(!r.url){toast("This one came from an uploaded video, so there's no link. In Lose It, use Create Recipe and add the ingredients.");return}
     if(isVideo(r.url)){toast(`Lose It can't read ${videoInfo(r.url).kind} links. Paste the creator's written-recipe link into Edit → Recipe link first.`);return}
