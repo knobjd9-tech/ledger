@@ -178,6 +178,24 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .choice{display:grid;gap:2px;text-align:left;width:100%;padding:12px 14px;white-space:normal}
 #multi .busycard{width:min(360px,100%);justify-items:stretch;text-align:center}
 .choice span{font-size:12px;font-weight:400;opacity:.85}
+.coverbox{display:grid;gap:8px}
+.form label.btn{display:inline-flex;align-items:center;font-size:15px;color:var(--ink);font-weight:600}
+.coverprev{width:100%;aspect-ratio:16/10;border-radius:10px;background:var(--raised);border:1px solid var(--line);display:grid;place-items:center;overflow:hidden}
+.coverprev img{width:100%;height:100%;object-fit:cover}
+#printArea{display:none}
+@media print{
+  body{background:#fff!important;color:#000!important;padding:0!important}
+  body>*:not(#printArea){display:none!important}
+  #printArea{display:block;font-family:Georgia,"Times New Roman",serif;color:#000;font-size:12pt;line-height:1.45;padding:0 4mm}
+  #printArea h1{font-family:var(--display);font-size:24pt;margin:0 0 2mm}
+  #printArea h2{font-family:var(--display);font-size:13pt;margin:6mm 0 2mm;border-bottom:1px solid #999;padding-bottom:1mm}
+  #printArea img{width:100%;max-height:70mm;object-fit:cover;border-radius:3mm;margin:2mm 0}
+  #printArea .pmeta{color:#444;margin:0}
+  #printArea .pmac span{margin-right:5mm}
+  #printArea li{margin:1mm 0}
+  #printArea .plinks{font-size:9pt;word-break:break-all;color:#333}
+  @page{margin:14mm}
+}
 </style>
 </head>
 <body>
@@ -205,7 +223,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
         <input id="importUrl" class="field" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste a recipe link">
         <button type="submit" class="btn primary" id="importBtn">Import</button>
       </div>
-      <div class="row upl"><span class="src">or</span><label class="btn" for="vidFile" id="vidLabel">Scan photos or videos</label><input id="vidFile" type="file" accept="image/*,video/*" multiple hidden><span class="src" id="aiHint"></span></div>
+      <div class="row upl"><span class="src">or</span><label class="btn" for="vidFile" id="vidLabel">Scan photos or videos</label><input id="vidFile" type="file" accept="image/*,video/*,application/pdf,.pdf" multiple hidden><span class="src" id="aiHint"></span></div>
       <div class="err" id="importErr" hidden></div>
     </form>
     <input id="search" class="field" type="search" placeholder="Search recipes or ingredients" autocomplete="off" aria-label="Search recipes">
@@ -278,7 +296,12 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
     <label for="eSteps">Steps (one per line)<textarea id="eSteps" class="field" style="min-height:180px"></textarea></label>
     <label for="eLinks">Extra links (one per line; add a name first if you like)<textarea id="eLinks" class="field" style="min-height:70px" placeholder="Sauce recipe https://…&#10;https://…"></textarea></label>
     <label for="eNotes">Notes<textarea id="eNotes" class="field" style="min-height:70px" placeholder="Swaps, tips, what to change next time"></textarea></label>
-    <label for="eImg">Photo link<input id="eImg" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off"></label>
+    <div class="coverbox">
+      <div class="lbl">Cover photo</div>
+      <div class="coverprev" id="ePrev"></div>
+      <div class="row"><label class="btn" for="eCoverFile">Choose or take a photo</label><input id="eCoverFile" type="file" accept="image/*" hidden><button type="button" class="btn danger" id="eCoverRemove">Remove photo</button></div>
+      <label for="eImg">Or paste a photo link<input id="eImg" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…"></label>
+    </div>
     <label for="eVideo">Video link: YouTube, TikTok or Instagram (optional)<input id="eVideo" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…"></label>
     <label for="eUrl">Recipe link<input id="eUrl" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off"></label>
     <div id="eDelete"></div>
@@ -292,7 +315,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
     <div class="notice" id="aiState"></div>
     <div class="panel">
       <h3>What it does</h3>
-      <p style="margin:0">Google's Gemini AI reads cooking videos and photos of recipes (cookbook pages, recipe cards, screenshots), then writes out the recipe with amounts, steps and estimated macros.</p>
+      <p style="margin:0">Google's Gemini AI reads cooking videos, photos of recipes (cookbook pages, recipe cards, screenshots) and recipe PDFs, then writes out the recipe with amounts, steps and estimated macros.</p>
       <ul style="margin:0;padding-left:18px;display:grid;gap:4px"><li><b>YouTube:</b> paste the link. If the description has no recipe, AI watches it automatically.</li><li><b>TikTok / Instagram:</b> save the video to your phone, then tap <b>Scan photos or videos</b>.</li><li><b>Cookbooks and recipe cards:</b> tap <b>Scan photos or videos</b> and take a photo. Pick several to scan more than one page or recipe at once.</li></ul>
     </div>
     <div class="panel">
@@ -312,7 +335,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 
 <div class="busy" id="multi" hidden role="dialog" aria-label="How to import these files"><div class="busycard" style="max-width:360px;gap:10px">
   <b style="font-size:17px">What are these?</b><span class="src" id="multiCount"></span>
-  <button type="button" class="btn primary choice" id="mOne"><b>One recipe</b><span>Pages or screenshots of the same recipe, or a video plus photos</span></button>
+  <button type="button" class="btn primary choice" id="mOne"><b>One recipe</b><span>Pages, screenshots or PDFs of the same recipe, or a video plus photos</span></button>
   <button type="button" class="btn choice" id="mMany"><b>Separate recipes</b><span>One recipe per file, saved straight to your list</span></button>
   <button type="button" class="btn" id="mCancel" style="background:none;border:0;color:var(--muted)">Cancel</button>
 </div></div>
@@ -340,6 +363,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 </section>
 
 <div class="toast" id="toast" role="status" hidden></div>
+<div id="printArea" aria-hidden="true"></div>
 
 <script>
 /* ---------- connection (same backend as Daily Ledger) ---------- */
@@ -598,7 +622,7 @@ $("importForm").addEventListener("submit",async e=>{
 /* ---------- AI video reading ---------- */
 function renderAi(){
   $("aiMenuSub").textContent=aiReady?"On · Gemini is set up":"Set up your free Gemini key";
-  $("aiHint").textContent=aiReady?"cookbook pages, cards, screenshots, videos":"needs your free AI key (menu)";
+  $("aiHint").textContent=aiReady?"cookbook pages, cards, screenshots, PDFs, videos":"needs your free AI key (menu)";
   $("aiState").className="notice"+(aiReady?"":" warn");
   $("aiState").textContent=aiReady?"AI reading is on.":"AI reading is off. Add your free key below to turn it on.";
   $("aiRemove").hidden=!aiReady;
@@ -632,6 +656,10 @@ function shrinkImage(file,max,q){return new Promise(res=>{
     c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);res(c.toDataURL("image/jpeg",q))};
   img.onerror=()=>res(""); img.src=URL.createObjectURL(file)})}
 async function prepFile(f){
+  if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)){
+    if(f.size>20*1024*1024) throw new Error(`“${f.name}” is ${Math.round(f.size/1048576)} MB. PDFs need to be under 20 MB.`);
+    return {data:await readB64(f),mime:"application/pdf",thumb:"",size:f.size};
+  }
   if(/^image\//.test(f.type)||/\.(heic|heif|jpe?g|png|webp)$/i.test(f.name)){
     const data=await shrinkImage(f,1600,.82); if(!data) throw new Error(`Couldn't open the photo “${f.name}”.`);
     return {data,mime:"image/jpeg",thumb:await shrinkImage(f,320,.55),size:data.length*.75};
@@ -693,7 +721,7 @@ function mergeIntoDraft(r,thumb){
 /* several files (or one) -> one recipe, then the review screen */
 async function scanOne(files,merge){
   try{
-    await withBusy(files.length>1?`AI is reading ${files.length} files…`:(/^video/.test(files[0].type)?"AI is watching the video…":"AI is reading the photo…"),async ctl=>{
+    await withBusy(files.length>1?`AI is reading ${files.length} files…`:(/^video/.test(files[0].type)?"AI is watching the video…":/pdf/i.test(files[0].type+files[0].name)?"AI is reading the PDF…":"AI is reading the photo…"),async ctl=>{
       $("busySub").textContent="Getting your files ready…";
       const prepped=[]; for(const f of files) prepped.push(await prepFile(f));
       const total=prepped.reduce((a,x)=>a+x.size,0);
@@ -749,6 +777,49 @@ function linksPanel(r){
   return `<div class="panel"><div class="sectionhead"><h3>Links</h3><button type="button" class="linkedit" id="lEdit">Add link</button></div><div class="links">${rows.length?"":'<div class="src">No links yet. Tap Add link to save the original page, a video, or anything related.</div>'}${rows.map(x=>`<a class="linkrow" href="${esc(x.url)}" target="_blank" rel="noopener"><span class="lic" aria-hidden="true">${x.icon}</span><span class="lt"><b>${esc(x.label)}</b><span>${esc(x.sub)}</span></span><span aria-hidden="true">↗</span></a>`).join("")}</div></div>`;
 }
 
+/* ---------- cover photos ---------- */
+// Photos you add are cropped to the card shape and kept small enough to fit in one Sheet cell.
+function coverFromFile(file){return new Promise((res,rej)=>{
+  const img=new Image();
+  img.onload=()=>{URL.revokeObjectURL(img.src);
+    const W=img.naturalWidth,H=img.naturalHeight,ar=16/10; let sw=W,sh=W/ar; if(sh>H){sh=H;sw=H*ar}
+    const sx=(W-sw)/2, sy=(H-sh)/2;
+    for(const [w,q] of [[800,.72],[720,.66],[640,.62],[560,.58],[480,.55],[400,.5]]){
+      const c=document.createElement("canvas");c.width=w;c.height=Math.round(w/ar);
+      c.getContext("2d").drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+      const d=c.toDataURL("image/jpeg",q); if(d.length<45000) return res(d);
+    }
+    rej(new Error("That photo couldn't be made small enough. Try another one."))};
+  img.onerror=()=>rej(new Error("Couldn't open that photo.")); img.src=URL.createObjectURL(file)})}
+function renderCoverEdit(){
+  const src=$("eImg").value.trim()||draft.image||"";
+  $("ePrev").innerHTML=src?`<img src="${esc(src)}" alt="" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'src',textContent:'That photo link didn’t load.'}))">`:'<span class="src">No cover photo yet</span>';
+  $("eCoverRemove").hidden=!src;
+}
+$("eCoverFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+  try{draft.image=await coverFromFile(f);$("eImg").value="";renderCoverEdit()}catch(err){toast(err.message)}};
+$("eCoverRemove").onclick=()=>{draft.image="";$("eImg").value="";renderCoverEdit()};
+$("eImg").addEventListener("input",()=>{if($("eImg").value.trim())draft.image=$("eImg").value.trim();renderCoverEdit()});
+
+/* ---------- save as PDF (print) ---------- */
+function printRecipe(r){
+  const f=servings/(r.servings||1), n=r.nutrition||{};
+  const macro=[["Calories",n.calories,""],["Protein",n.protein,"g"],["Carbs",n.carbs,"g"],["Fat",n.fat,"g"]].filter(x=>x[1]!=null).map(x=>`<span><b>${x[1]}${x[2]}</b> ${x[0]}</span>`).join("");
+  const links=[r.url&&!isVideo(r.url)?["Original recipe",r.url]:null,r.video?["Video",r.video]:null,...(r.links||[]).map(l=>[l.label,l.url])].filter(Boolean);
+  $("printArea").innerHTML=`
+    <h1>${esc(r.title||"Recipe")}</h1>
+    <p class="pmeta">${[servings+" serving"+(servings===1?"":"s"),r.time?r.time+" min":"",(r.tags||[]).join(" · ")].filter(Boolean).join("  ·  ")}</p>
+    ${r.image?`<img src="${esc(r.image)}" alt="" referrerpolicy="no-referrer">`:""}
+    ${macro?`<p class="pmac">Per serving${r.nutritionEstimated?" (estimated)":""}: ${macro}</p>`:""}
+    <h2>Ingredients</h2><ul>${(r.ingredients||[]).map(l=>{const s=lineFor(l,f);return `<li>${s.q?`<b>${esc(s.q)}</b> `:""}${s.alt?`(${esc(s.alt)}) `:""}${esc(s.rest.trim())}</li>`}).join("")}</ul>
+    <h2>Steps</h2><ol>${(r.steps||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
+    ${r.notes?`<h2>Notes</h2><p>${esc(r.notes)}</p>`:""}
+    ${links.length?`<h2>Links</h2><ul class="plinks">${links.map(([l,u])=>`<li>${esc(l)}: ${esc(u)}</li>`).join("")}</ul>`:""}`;
+  const done=()=>{$("printArea").innerHTML="";window.removeEventListener("afterprint",done)};
+  window.addEventListener("afterprint",done);
+  setTimeout(()=>{try{window.print()}catch(e){toast("Printing isn't available here. Open the app in Safari and use Share → Print.")}},150);
+}
+
 /* ---------- detail ---------- */
 const byId=id=>recipes.find(r=>r.id===id);
 function openDetail(id){openId=id;const r=byId(id);if(!r)return;servings=r.servings||1;renderDetail();$("detail").hidden=false;$("detail").scrollTop=0}
@@ -762,6 +833,7 @@ function renderDetail(){
   let host=""; try{host=new URL(r.url).hostname.replace(/^www\./,"")}catch(e){}
   $("dBody").innerHTML=`
     ${r.video&&isVideo(r.video)?videoBlock(r):thumb(r,"hero")}
+    <div class="row" style="justify-content:space-between"><span class="src">${r.image?(r.video?"Cover photo shows on your recipe list":""):"No cover photo yet"}</span><label class="linkedit" for="dCoverFile" style="cursor:pointer">${r.image?"Change cover photo":"Add a cover photo"}</label><input id="dCoverFile" type="file" accept="image/*" hidden></div>
     <div style="display:grid;gap:6px">
       <h2 class="dtitle">${esc(r.title||"Untitled recipe")}</h2>
       <div class="meta">${r.time?`<span>${r.time} min</span>`:""}${host&&!isVideo(r.url)?`<a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(host)} ↗</a>`:""}${cooked.length?`<span>Cooked ${cooked.length}× · last ${last}</span>`:""}</div>
@@ -772,7 +844,8 @@ function renderDetail(){
       <button type="button" class="btn primary wide" id="aCook" ${(r.steps||[]).length?"":"disabled"}>Start cooking</button>
       <button type="button" class="btn" id="aCooked">I cooked this</button>
       <button type="button" class="btn" id="aGroc">Add to grocery list</button>
-      <button type="button" class="btn wide" id="aLoseIt">Copy link for Lose It</button>
+      <button type="button" class="btn" id="aLoseIt">Copy link for Lose It</button>
+      <button type="button" class="btn" id="aPdf">Save as PDF</button>
     </div>
     <div class="panel">
       <div class="sectionhead"><h3>Ingredients</h3>
@@ -797,6 +870,9 @@ function renderDetail(){
     (r.ingredients||[]).forEach(l=>{const s=lineFor(l,f2);grocery.push({id:Math.random().toString(36).slice(2,9),text:(s.q?s.q+" ":"")+(s.alt?"("+s.alt+") ":"")+s.rest.trim(),recipe:r.title,done:false})});
     saveGrocery(); toast(`Added ${(r.ingredients||[]).length} items to your grocery list.`);
   };
+  $("aPdf").onclick=()=>printRecipe(r);
+  $("dCoverFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+    try{r.image=await coverFromFile(f);cache();renderDetail();renderList();enqueue({action:"saveRecipe",recipe:r});toast("Cover photo updated.")}catch(err){toast(err.message)}};
   $("aLoseIt").onclick=async()=>{
     if(!r.url){toast("This one came from an uploaded video, so there's no link. In Lose It, use Create Recipe and add the ingredients.");return}
     if(isVideo(r.url)){toast(`Lose It can't read ${videoInfo(r.url).kind} links. Paste the creator's written-recipe link into Edit → Recipe link first.`);return}
@@ -817,9 +893,9 @@ function openEdit(r,isNew){
   $("eTitle").value=r.title||""; $("eServ").value=r.servings||""; $("eTime").value=r.time||"";
   $("eCal").value=n.calories??""; $("ePro").value=n.protein??""; $("eCarb").value=n.carbs??""; $("eFat").value=n.fat??"";
   $("eIng").value=(r.ingredients||[]).join("\n"); $("eSteps").value=(r.steps||[]).join("\n");
-  $("eNotes").value=r.notes||""; $("eLinks").value=(r.links||[]).map(l=>(l.label&&l.label!==hostOf(l.url)?l.label+" ":"")+l.url).join("\n"); $("eImg").value=String(r.image||"").startsWith("data:")?"":(r.image||""); $("eImg").placeholder=String(r.image||"").startsWith("data:")?"Using a frame from the video":""; $("eUrl").value=r.url||""; $("eVideo").value=r.video||"";
+  $("eNotes").value=r.notes||""; $("eLinks").value=(r.links||[]).map(l=>(l.label&&l.label!==hostOf(l.url)?l.label+" ":"")+l.url).join("\n"); $("eImg").value=String(r.image||"").startsWith("data:")?"":(r.image||""); $("eImg").placeholder=String(r.image||"").startsWith("data:")?"Using a photo you added":""; $("eUrl").value=r.url||""; $("eVideo").value=r.video||"";
   let note="";
-  const v=videoInfo(r.video), aiBtn=(r.fromVideo&&v)?(v.kind==="YouTube"?'<button type="button" class="btn primary" id="eAI">Have AI watch the video</button>':`<label class="btn primary" for="vidFile2">Upload the video or screenshots for AI</label><input id="vidFile2" type="file" accept="image/*,video/*" multiple hidden><div class="src" style="margin-top:6px">Save it first: in ${v.kind}, tap Share → ${v.kind==="TikTok"?"Save video":"screen record the reel"}.</div>`):"";
+  const v=videoInfo(r.video), aiBtn=(r.fromVideo&&v)?(v.kind==="YouTube"?'<button type="button" class="btn primary" id="eAI">Have AI watch the video</button>':`<label class="btn primary" for="vidFile2">Upload the video or screenshots for AI</label><input id="vidFile2" type="file" accept="image/*,video/*,application/pdf,.pdf" multiple hidden><div class="src" style="margin-top:6px">Save it first: in ${v.kind}, tap Share → ${v.kind==="TikTok"?"Save video":"screen record the reel"}.</div>`):"";
   if(isNew&&r.byAI) note=`<div class="notice">AI read this and wrote it out. Amounts marked "(est.)" were guessed${r.nutritionEstimated?", and the macros are AI estimates. Swap in Lose It's numbers if they differ":""}. Check it over, then Save.</div>`;
   else if(isNew&&r.partial&&r.fromVideo) note='<div class="notice warn">Saved the video, but its caption has no recipe to read. Let AI watch it instead, or fill in what you need.'+aiBtn+'</div>';
   else if(isNew&&r.partial) note='<div class="notice warn">This site doesn\'t share its recipe in a readable format, so fill in what you need. Tip: Lose It\'s importer may still read it.</div>';
@@ -832,6 +908,7 @@ function openEdit(r,isNew){
   $("eDelete").innerHTML=isNew?"":'<button type="button" class="btn danger" id="eDel">Delete recipe</button><span id="eDelConfirm" hidden class="row" style="margin-top:8px"><span class="src">Delete this recipe for good?</span><button type="button" class="btn danger" id="eDelYes">Delete</button><button type="button" class="btn" id="eDelNo">Keep</button></span>';
   if(!isNew){$("eDel").onclick=()=>{$("eDelConfirm").hidden=false};$("eDelNo").onclick=()=>{$("eDelConfirm").hidden=true};
     $("eDelYes").onclick=()=>{const id=draft.id;$("edit").hidden=true;draft=null;deleteWithUndo(id)}}
+  renderCoverEdit();
   renderTagEdit(); $("edit").hidden=false; $("edit").scrollTop=0;
 }
 function renderTagEdit(){
