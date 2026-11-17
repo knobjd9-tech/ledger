@@ -159,6 +159,14 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .video.tall{aspect-ratio:auto;height:min(580px,62dvh);max-width:340px;margin-inline:auto;background:#000}
 .video.ig{aspect-ratio:auto;height:min(560px,60dvh);max-width:420px;margin-inline:auto;background:#fff}
+.parts{display:flex;gap:6px;justify-content:center}
+.parts button{flex:0 1 140px;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--muted);font-weight:600;font-size:14px}
+.parts button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.vcar{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;gap:12px;overscroll-behavior-x:contain}
+.vcar::-webkit-scrollbar{display:none}
+.vcar>.vslide{flex:0 0 100%;scroll-snap-align:center;display:grid;gap:6px;justify-items:center}
+.vcar>.vslide>.video{width:100%}
+#importUrl2{width:100%}
 .tw{position:relative;display:block;width:96px;height:96px}
 .play{position:absolute;right:6px;bottom:6px;width:24px;height:24px;border-radius:99px;background:rgba(0,0,0,.7);color:#fff;font-size:10px;display:grid;place-items:center;padding-left:2px}
 .upl{gap:8px}
@@ -246,6 +254,8 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
         <input id="importUrl" class="field" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste a link (website, TikTok, Instagram, YouTube)">
         <button type="submit" class="btn primary" id="importBtn">Import</button>
       </div>
+      <input id="importUrl2" class="field" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Part 2 link (TikTok, Instagram or YouTube)" hidden>
+      <button type="button" class="linkedit" id="part2Btn" style="justify-self:start">+ Two-part video? Add the Part 2 link</button>
       <div class="row upl"><label class="btn" for="vidFile" id="vidLabel">+ Video, photo, PDF</label><input id="vidFile" type="file" accept="image/*,video/*,application/pdf,.pdf" multiple hidden><button type="button" class="btn" id="textBtn" aria-expanded="false">+ Paste text</button></div>
       <ul class="attachments" id="attachList" hidden></ul>
       <textarea id="importText" class="field" hidden placeholder="Paste the video's description or caption, or any recipe text"></textarea>
@@ -344,6 +354,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
       <label for="eImg">Or paste a photo link<input id="eImg" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…"></label>
     </div>
     <label for="eVideo">Video link: YouTube, TikTok or Instagram (optional)<input id="eVideo" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://…"></label>
+    <label for="eVideo2">Part 2 video link (optional)<input id="eVideo2" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="For recipes split across two videos"></label>
     <label for="eUrl">Recipe link<input id="eUrl" class="field" type="text" inputmode="url" autocapitalize="off" autocorrect="off"></label>
     <div id="eDelete"></div>
   </form>
@@ -531,7 +542,19 @@ function videoInfo(u){
   return null;
 }
 const isVideo=u=>!!videoInfo(u);
-function videoBlock(r){const v=videoInfo(r.video);if(!v)return "";
+function videoBlock(r){
+  const v2=videoInfo(r.video2);
+  if(!v2) return videoOne(r.video,r);
+  return `<div class="parts" role="group" aria-label="Video part"><button type="button" data-part="0" aria-pressed="true">Part 1</button><button type="button" data-part="1" aria-pressed="false">Part 2</button></div>
+    <div class="vcar" id="vcar"><div class="vslide">${videoOne(r.video,r)}</div><div class="vslide">${videoOne(r.video2,r)}</div></div>`;
+}
+function wireParts(){
+  const car=$("vcar"); if(!car) return; const btns=[...document.querySelectorAll(".parts button")];
+  const mark=i=>btns.forEach((b,j)=>b.setAttribute("aria-pressed",String(i===j)));
+  btns.forEach(b=>b.onclick=()=>{const i=Number(b.dataset.part);car.scrollTo({left:i*(car.clientWidth+12),behavior:"smooth"});mark(i)});
+  car.addEventListener("scroll",()=>mark(Math.round(car.scrollLeft/(car.clientWidth+12))),{passive:true});
+}
+function videoOne(u,r){const v=videoInfo(u);if(!v)return "";r=Object.assign({},r,{video:u});
   const link=`<a class="src" href="${esc(r.video)}" target="_blank" rel="noopener" style="color:var(--accent)">Open in ${v.kind} ↗</a>`;
   if(!v.embed) return thumb(r,"hero")+link;
   return `<div class="video ${v.cls}"><iframe src="${v.embed}" title="Recipe video" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" scrolling="no"></iframe></div>${link}`}
@@ -699,13 +722,18 @@ function updateHint(){
   let h="";
   if(n||txt) h=aiReady?(social?"AI will use the post's caption"+(n?" together with your files":"")+(txt?" and your text":"")+".":"AI will read "+(n?(n>1?"these files":"this file"):"")+(n&&txt?" and ":"")+(txt?"your text":"")+" and write the recipe."):"Reading files and text needs your free AI key (menu → AI reading).";
   else if(social) h="Tip: attach the saved video too, and AI will use the caption and the video together.";
+  if(isVideo($("importUrl2").value.trim())) h=aiReady?`Two-part recipe: AI will combine both captions${n?` and your ${n} file${n>1?"s":""}`:""} into one recipe. Attach Part 1's video first.`:"Two-part recipes need your free AI key (menu → AI reading).";
   else if(!hasLink) h="Paste a link, add a video, photos or PDF, or paste recipe text. Mix them for the best result.";
   $("aiHint").textContent=h;
 }
 $("attachList").addEventListener("click",e=>{const i=e.target.dataset&&e.target.dataset.i;if(i!=null){attached.splice(Number(i),1);renderAttached()}});
 $("textBtn").onclick=()=>{const t=$("importText");t.hidden=!t.hidden;$("textBtn").setAttribute("aria-expanded",!t.hidden);if(!t.hidden)t.focus();updateHint()};
-$("importUrl").addEventListener("input",updateHint); $("importText").addEventListener("input",updateHint);
-function clearImport(){attached=[];$("importUrl").value="";$("importText").value="";$("importText").hidden=true;$("textBtn").setAttribute("aria-expanded","false");renderAttached()}
+$("importUrl").addEventListener("input",updateHint); $("importText").addEventListener("input",updateHint); $("importUrl2").addEventListener("input",updateHint);
+$("part2Btn").onclick=()=>{$("importUrl2").hidden=false;$("part2Btn").hidden=true;$("importUrl2").focus();updateHint()};
+// pasted two links into the first box: move the second one to Part 2
+$("importUrl").addEventListener("input",()=>{const l=$("importUrl").value.match(/https?:\/\/\S+/gi)||[];
+  if(l.length>1&&isVideo(l[0])&&isVideo(l[1])){$("importUrl").value=l[0];$("importUrl2").value=l[1];$("importUrl2").hidden=false;$("part2Btn").hidden=true;updateHint()}});
+function clearImport(){attached=[];$("importUrl").value="";$("importUrl2").value="";$("importUrl2").hidden=true;$("part2Btn").hidden=false;$("importText").value="";$("importText").hidden=true;$("textBtn").setAttribute("aria-expanded","false");renderAttached()}
 
 $("importForm").addEventListener("submit",async e=>{
   e.preventDefault();
@@ -714,6 +742,20 @@ $("importForm").addEventListener("submit",async e=>{
   err.hidden=true;
   const link=m?m[0].replace(/[)\].,]+$/,""):"";
   const social=(videoInfo(link)||{}).kind; 
+  const m2=$("importUrl2").value.trim().match(/https?:\/\/\S+/i), link2=m2?m2[0].replace(/[)\].,]+$/,""):"";
+  if(link2&&isVideo(link2)){
+    if(!social){err.textContent="Paste Part 1's video link in the top box.";err.hidden=false;return}
+    if(!aiReady){$("aiSheet").hidden=false;renderAi();toast("Add your free AI key first.");return}
+    const vk=(videoInfo(link)||{}).key; const dup=recipes.find(r=>vk&&(videoInfo(r.video)||{}).key===vk);
+    if(dup&&!files.length){openDetail(dup.id);toast("You already saved this one.");return}
+    const k2=videoInfo(link2).kind;
+    const c1=social==="YouTube"?{text:"",caption:""}:await checkCaption(link,social,"Part 1"); if(c1===null) return;
+    const c2=await checkCaption(link2,k2,"Part 2",true); if(c2===null) return;
+    const cap2=(c2.text||c2.caption||"").trim();
+    const all=["This recipe is split across TWO videos, Part 1 and Part 2. Any video files are in order (Part 1 first). Combine everything into ONE complete recipe.",
+      c1.text?"Part 1 caption:\n"+c1.text:"", cap2?"Part 2 caption / description ("+k2+"):\n"+cap2:"", text].filter(Boolean).join("\n\n");
+    const ok=await scanOne(files,false,{url:link,text:all,caption:c1.text?"":c1.caption,captionChecked:social!=="YouTube",video2:link2}); if(ok) clearImport(); return;
+  }
   if(aiReady&&!text&&(social==="TikTok"||social==="Instagram")){
     const vk=(videoInfo(link)||{}).key; const dup=recipes.find(r=>vk&&(videoInfo(r.video)||{}).key===vk);
     if(dup&&!files.length){openDetail(dup.id);toast("You already saved this one.");return}
@@ -866,13 +908,14 @@ async function scanOne(files,merge,extra){
       $("busySub").textContent="Getting your files ready…";
       const prepped=await Promise.all(files.map(f=>prepFile(f,files.length>2)));
       const total=prepped.reduce((a,x)=>a+x.size,0);
-      if(total>MAXMB*1024*1024) throw new Error(`Those files add up to ${Math.round(total/1048576)} MB. Keep it under ${MAXMB} MB together, or import them as separate recipes.`);
+      if(total>(files.length>1?34:MAXMB)*1024*1024) throw new Error(`Those files add up to ${Math.round(total/1048576)} MB. Keep it under ${files.length>1?34:MAXMB} MB together, or import them as separate recipes.`);
       $("busySub").textContent="Usually 30 seconds to 2 minutes. Keep the app open and your screen on.";
       const req={files:prepped.map(x=>({data:x.data,mime:x.mime}))};
       if(extra.url) req.url=extra.url; if(extra.text) req.text=extra.text;
       if(extra.captionChecked){req.captionChecked=true; req.caption=extra.caption||"";}
       let r; try{r=await aiCall(req,ctl)}catch(e){ if(e.reason!=="rate"&&e.reason!=="busy") throw e; $("busySub").textContent="Google asked us to slow down. Trying again in a few seconds…"; await sleep(10000); r=await aiCall(req,ctl) }
       const thumb=(prepped.find(x=>x.thumb)||{}).thumb||r.postImage||""; delete r.postImage;
+      if(extra.video2){r.video2=extra.video2; if(!r.video&&extra.url){r.video=extra.url;r.url=extra.url;r.fromVideo=true}}
       if(merge&&draft) mergeIntoDraft(r,thumb); else openEdit(newRecipe(Object.assign({image:thumb},r)),true);
     });
     return true;
@@ -943,7 +986,8 @@ function linkify(t){return esc(t).replace(/(https?:\/\/[^\s<]+)/g,u=>`<a href="$
 function linksPanel(r){
   const rows=[];
   if(r.url&&!isVideo(r.url)) rows.push({label:"Original recipe",sub:hostOf(r.url),url:r.url,icon:"🔗"});
-  const v=videoInfo(r.video); if(v) rows.push({label:"Watch on "+v.kind,sub:hostOf(r.video),url:r.video,icon:"▶"});
+  const v=videoInfo(r.video), v2=videoInfo(r.video2); if(v) rows.push({label:"Watch "+(v2?"Part 1 ":"")+"on "+v.kind,sub:hostOf(r.video),url:r.video,icon:"▶"});
+  if(v2) rows.push({label:"Watch Part 2 on "+v2.kind,sub:hostOf(r.video2),url:r.video2,icon:"▶"});
   (r.links||[]).forEach(l=>rows.push({label:l.label||hostOf(l.url),sub:hostOf(l.url),url:l.url,icon:videoInfo(l.url)?"▶":"↗"}));
   return `<div class="panel"><div class="sectionhead"><h3>Links</h3><button type="button" class="linkedit" id="lEdit">Add link</button></div><div class="links">${rows.length?"":'<div class="src">No links yet. Tap Add link to save the original page, a video, or anything related.</div>'}${rows.map(x=>`<a class="linkrow" href="${esc(x.url)}" target="_blank" rel="noopener"><span class="lic" aria-hidden="true">${x.icon}</span><span class="lt"><b>${esc(x.label)}</b><span>${esc(x.sub)}</span></span><span aria-hidden="true">↗</span></a>`).join("")}</div></div>`;
 }
@@ -1029,7 +1073,7 @@ $("eImg").addEventListener("input",()=>{if($("eImg").value.trim())draft.image=$(
 function printRecipe(r){
   const f=servings/(r.servings||1), n=r.nutrition||{};
   const macro=[["Calories",n.calories,""],["Protein",n.protein,"g"],["Carbs",n.carbs,"g"],["Fat",n.fat,"g"]].filter(x=>x[1]!=null).map(x=>`<span><b>${x[1]}${x[2]}</b> ${x[0]}</span>`).join("");
-  const links=[r.url&&!isVideo(r.url)?["Original recipe",r.url]:null,r.video?["Video",r.video]:null,...(r.links||[]).map(l=>[l.label,l.url])].filter(Boolean);
+  const links=[r.url&&!isVideo(r.url)?["Original recipe",r.url]:null,r.video?[r.video2?"Video, Part 1":"Video",r.video]:null,r.video2?["Video, Part 2",r.video2]:null,...(r.links||[]).map(l=>[l.label,l.url])].filter(Boolean);
   $("printArea").innerHTML=`
     <h1>${esc(r.title||"Recipe")}</h1>
     <p class="pmeta">${[servings+" serving"+(servings===1?"":"s"),r.time?r.time+" min":"",(r.tags||[]).join(" · ")].filter(Boolean).join("  ·  ")}</p>
@@ -1051,17 +1095,17 @@ function looksLikeRecipe(t){
   return units>=2||(/ingredients?\b/i.test(t)&&/\d/.test(t));
 }
 /** Returns {text, caption, writtenLink} to continue, or null if you cancelled. */
-async function checkCaption(link,kind){
+async function checkCaption(link,kind,part,noWritten){
   let post=null;
   try{
-    await withBusy("Reading the "+kind+" caption…",async ctl=>{$("busySub").textContent="A few seconds.";$("busySub").dataset.fixed="1";
+    await withBusy("Reading the "+kind+" caption"+(part?" ("+part+")":"")+"…",async ctl=>{$("busySub").textContent="A few seconds.";$("busySub").dataset.fixed="1";
       const j=await post_({action:"caption",url:link},ctl.signal); post=j.post||null});
   }catch(e){ if(String(e.message)==="cancel") return null }
   const caption=(post&&post.caption)||"";
   const writtenLink=(caption.match(/https?:\/\/\S+/g)||[]).some(u=>!/tiktok|instagram|youtu|linktr|amzn|amazon|shopmy|ltk/i.test(u));
-  if(looksLikeRecipe(caption)||writtenLink) return {text:"",caption,writtenLink};   // good caption, or it links to the written recipe
+  if(looksLikeRecipe(caption)||(writtenLink&&!noWritten)) return {text:"",caption,writtenLink};   // good caption, or it links to the written recipe
   return new Promise(res=>{
-    $("capKind").textContent=kind; $("capOpen").href=link; $("capOpen").textContent="Open in "+kind+" ↗";
+    $("capKind").textContent=kind+(part?" "+part:""); $("capOpen").href=link; $("capOpen").textContent="Open in "+kind+" ↗";
     $("capMsg").textContent=caption?`The ${kind} caption doesn't seem to include the recipe. If the full recipe is in the caption, copy it in ${kind} and paste it below.`:`Couldn't read the ${kind} caption. Copy it in ${kind} (tap the caption, then hold to copy) and paste it below.`;
     $("capText").value=caption; $("capDlg").hidden=false; $("capText").focus();
     const close=v=>{$("capDlg").hidden=true;["capUse","capSkip","capCancel","capPaste"].forEach(id=>$(id).onclick=null);res(v)};
@@ -1166,6 +1210,7 @@ function renderDetail(){
   };
   $("aPdf").onclick=()=>printRecipe(r);
   $("aCap").onclick=()=>updateFromCaption(r);
+  wireParts();
   $("dCoverFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
     try{const d=await coverFromFile(f); if(!d)return; r.image=d;cache();renderDetail();renderList();enqueue({action:"saveRecipe",recipe:r});toast("Cover photo updated.")}catch(err){toast(err.message)}};
   $("aLoseIt").onclick=async()=>{
@@ -1188,7 +1233,7 @@ function openEdit(r,isNew){
   $("eTitle").value=r.title||""; $("eServ").value=r.servings||""; $("eTime").value=r.time||"";
   $("eCal").value=n.calories??""; $("ePro").value=n.protein??""; $("eCarb").value=n.carbs??""; $("eFat").value=n.fat??"";
   $("eIng").value=(r.ingredients||[]).join("\n"); $("eSteps").value=(r.steps||[]).join("\n");
-  $("eNotes").value=r.notes||""; $("eLinks").value=(r.links||[]).map(l=>(l.label&&l.label!==hostOf(l.url)?l.label+" ":"")+l.url).join("\n"); $("eImg").value=String(r.image||"").startsWith("data:")?"":(r.image||""); $("eImg").placeholder=String(r.image||"").startsWith("data:")?"Using a photo you added":""; $("eUrl").value=r.url||""; $("eVideo").value=r.video||"";
+  $("eNotes").value=r.notes||""; $("eLinks").value=(r.links||[]).map(l=>(l.label&&l.label!==hostOf(l.url)?l.label+" ":"")+l.url).join("\n"); $("eImg").value=String(r.image||"").startsWith("data:")?"":(r.image||""); $("eImg").placeholder=String(r.image||"").startsWith("data:")?"Using a photo you added":""; $("eUrl").value=r.url||""; $("eVideo").value=r.video||""; $("eVideo2").value=r.video2||"";
   let note="";
   const v=videoInfo(r.video), aiBtn=(r.fromVideo&&v)?(v.kind==="YouTube"?'<button type="button" class="btn primary" id="eAI">Have AI watch the video</button>':`<label class="btn primary" for="vidFile2">Upload the video or screenshots for AI</label><input id="vidFile2" type="file" accept="image/*,video/*,application/pdf,.pdf" multiple hidden><div class="src" style="margin-top:6px">Save it first: in ${v.kind}, tap Share → ${v.kind==="TikTok"?"Save video":"screen record the reel"}.</div>`):"";
   if(isNew&&r.byAI) note=`<div class="notice">${r.usedCaption?"AI combined the post's caption with what you added and wrote this out.":"AI read this and wrote it out."} Amounts marked "(est.)" were guessed${r.nutritionEstimated?", and the macros are AI estimates. Swap in Lose It's numbers if they differ":""}. Check it over, then Save.</div>`;
@@ -1224,7 +1269,7 @@ $("eSave").onclick=()=>{
     nutrition:{calories:num("eCal"),protein:num("ePro"),carbs:num("eCarb"),fat:num("eFat")},
     ingredients:lines("eIng"),steps:lines("eSteps"),notes:$("eNotes").value.trim(),links:parseLinks($("eLinks").value),image:imgField||keepImg,url:$("eUrl").value.trim()});
   delete draft.byAI; delete draft.usedCaption; delete draft.aiUpdated;
-  {const v=$("eVideo").value.trim(); draft.video=isVideo(v)?v:"";}
+  {const v=$("eVideo").value.trim(); draft.video=isVideo(v)?v:""; const v2=$("eVideo2").value.trim(); draft.video2=isVideo(v2)&&draft.video?v2:"";}
   delete draft.partial;
   const i=recipes.findIndex(x=>x.id===draft.id); if(i>=0) recipes[i]=draft; else recipes.unshift(draft);
   cache(); enqueue({action:"saveRecipe",recipe:draft});
