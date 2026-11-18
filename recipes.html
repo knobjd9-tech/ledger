@@ -94,6 +94,18 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .macro{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:1px}
 .macro .v{font-family:var(--display);font-weight:800;font-size:20px}
 .macro .v.na{color:var(--muted)}
+.servw{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin-top:8px;font-size:14px;color:var(--muted)}
+.servw b{color:var(--ink);font-family:var(--display);font-weight:800}
+.bd{list-style:none;margin:0;padding:0;display:grid}
+.bd li{display:grid;gap:2px;padding:9px 0;border-top:1px solid var(--line)}
+.bd li:first-child{border-top:0}
+.bd .bl{font-size:15px}
+.bd .bn{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.bd .bn b{color:var(--ink);font-weight:700}
+.bd li.tot{border-top:2px solid var(--line)}
+.bd li.tot .bl{font-weight:700}
+.weigh{display:flex;gap:8px;align-items:center;flex-wrap:nowrap}
+.weigh .field{width:120px;flex:none}
 .macro.cal .v{color:var(--accent)}
 .stepper{display:flex;align-items:center;gap:6px}
 .stepper button{width:34px;height:34px;border-radius:99px;background:var(--raised);border:1px solid var(--line);font-size:18px;line-height:1}
@@ -326,7 +338,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
     <label for="eTitle">Title<input id="eTitle" class="field" type="text"></label>
     <div class="grid2">
       <label for="eServ">Servings<input id="eServ" class="field" type="number" inputmode="numeric" min="1"></label>
-      <label for="eTime">Total time (min)<input id="eTime" class="field" type="number" inputmode="numeric" min="0"></label>
+      <div><span class="lbl" style="display:block;margin-bottom:4px">Total time</span><div class="row" style="flex-wrap:nowrap;gap:6px"><label for="eTimeH" style="flex:1"><input id="eTimeH" class="field" type="number" inputmode="numeric" min="0" placeholder="0" aria-label="Hours"><span class="src">hours</span></label><label for="eTimeM" style="flex:1"><input id="eTimeM" class="field" type="number" inputmode="numeric" min="0" placeholder="0" aria-label="Minutes"><span class="src">minutes</span></label></div></div>
     </div>
     <div>
       <div class="lbl" style="margin-bottom:6px">Per serving</div>
@@ -629,11 +641,12 @@ function matches(r){
   const hay=(r.title+" "+(r.tags||[]).join(" ")+" "+(r.ingredients||[]).join(" ")).toLowerCase();
   return query.toLowerCase().split(/\s+/).every(w=>hay.includes(w));
 }
+const fmtTime=m=>{m=Math.round(m||0); if(!m) return ""; const h=Math.floor(m/60), mm=m%60; return h?(h+" hr"+(mm?" "+mm+" min":"")):mm+" min"};
 function cardMeta(r){
   const n=r.nutrition||{}, bits=[];
   if(n.calories!=null) bits.push(`<span><b>${n.calories}</b> cal</span>`);
   if(n.protein!=null) bits.push(`<span><b>${n.protein}g</b> protein</span>`);
-  if(r.time) bits.push(`<span>${r.time<60?r.time+" min":Math.floor(r.time/60)+" hr"+(r.time%60?" "+r.time%60+" min":"")}</span>`);
+  if(r.time) bits.push(`<span>${fmtTime(r.time)}</span>`);
   if((r.cooked||[]).length) bits.push(`<span>Cooked ${(r.cooked||[]).length}×</span>`);
   return bits.join("");
 }
@@ -1128,7 +1141,7 @@ function printRecipe(r){
   const links=[r.url&&!isVideo(r.url)?["Original recipe",r.url]:null,r.video?[r.video2?"Video, Part 1":"Video",r.video]:null,r.video2?["Video, Part 2",r.video2]:null,...(r.links||[]).map(l=>[l.label,l.url])].filter(Boolean);
   $("printArea").innerHTML=`
     <h1>${esc(r.title||"Recipe")}</h1>
-    <p class="pmeta">${[servings+" serving"+(servings===1?"":"s"),r.time?r.time+" min":"",(r.tags||[]).join(" · ")].filter(Boolean).join("  ·  ")}</p>
+    <p class="pmeta">${[servings+" serving"+(servings===1?"":"s"),r.time?fmtTime(r.time):"",(r.tags||[]).join(" · ")].filter(Boolean).join("  ·  ")}</p>
     ${r.image?`<img src="${esc(r.image)}" alt="" referrerpolicy="no-referrer">`:""}
     ${macro?`<p class="pmac">Per serving${r.nutritionEstimated?" (estimated)":""}: ${macro}</p>`:""}
     <h2>Ingredients</h2><ul>${(r.ingredients||[]).map(l=>{const s=lineFor(l,f);return `<li>${s.q?`<b>${esc(s.q)}</b> `:""}${s.alt?`(${esc(s.alt)}) `:""}${esc(s.rest.trim())}</li>`}).join("")}</ul>
@@ -1209,6 +1222,55 @@ async function updateFromCaption(r){
   }catch(e){toast(e.message)}
 }
 
+/* ---------- serving weight + macro breakdown ---------- */
+// cooked weight of the whole dish: what you weighed, else the AI estimate
+const dishWeight=r=>r.weighed||((r.breakdown||{}).cookedWeight)||null;
+const ingSig=r=>(r.ingredients||[]).join("|");
+function servingLine(r){
+  const w=dishWeight(r), sv=r.servings||1, n=r.nutrition||{};
+  if(!w) return `<div class="servw"><span>Serving size: tap <b style="font-family:inherit;font-weight:600;color:var(--accent)">Macro breakdown</b> below, or weigh the finished dish.</span></div>`;
+  const per=Math.round(w/sv), totCal=n.calories!=null?n.calories*sv:(r.breakdown?r.breakdown.total.calories:null);
+  const per100=totCal!=null?Math.round(totCal/w*100):null;
+  return `<div class="servw"><span>1 serving ≈ <b>${per} g</b> cooked${r.weighed?"":' <span class="est">est.</span>'}</span>${per100!=null?`<span><b>${per100}</b> cal per 100 g</span>`:""}<span>Whole dish ${r.weighed?"":"≈ "}${w} g</span></div>`;
+}
+function breakdownPanel(r){
+  const b=r.breakdown;
+  if(!b) return `<div class="panel"><div class="sectionhead"><h3>Macro breakdown</h3></div><div class="src">See calories, protein, carbs and fat for each ingredient, plus the cooked weight of the dish so you know what 1 serving weighs.</div><button type="button" class="btn primary" id="bdRun" ${(r.ingredients||[]).length?"":"disabled"}>Macro breakdown</button></div>`;
+  const sv=r.servings||1, t=b.total, f=x=>x==null?"–":x;
+  const row=(l,x,cls)=>`<li class="${cls||""}"><span class="bl">${esc(l)}</span><span class="bn">${x.grams!=null?`${x.grams} g · `:""}<b>${f(x.calories)}</b> cal · ${f(x.protein)}g P · ${f(x.carbs)}g C · ${f(x.fat)}g F</span></li>`;
+  const per={calories:Math.round(t.calories/sv),protein:Math.round(t.protein/sv),carbs:Math.round(t.carbs/sv),fat:Math.round(t.fat/sv)};
+  const n=r.nutrition||{}, differs=["calories","protein","carbs","fat"].some(k=>n[k]!==per[k]);
+  const stale=b.sig&&b.sig!==ingSig(r);
+  return `<div class="panel"><div class="sectionhead"><h3>Macro breakdown</h3><button type="button" class="linkedit" id="bdRun">Redo</button></div>
+    ${stale?'<div class="notice warn">The ingredients changed since this was worked out. Tap Redo to update it.</div>':""}
+    <div class="src">Raw ingredients, whole recipe (AI estimate).</div>
+    <ul class="bd">${b.items.map(x=>row(x.line,x)).join("")}${row("Whole recipe",Object.assign({grams:b.rawWeight},t),"tot")}${row(`Per serving (÷ ${sv})`,Object.assign({grams:null},per),"tot")}</ul>
+    ${differs?`<button type="button" class="btn" id="bdUse">Use these for the per-serving macros</button>`:""}
+    <div style="display:grid;gap:6px;border-top:1px solid var(--line);padding-top:10px">
+      <div><b>Cooked weight</b> <span class="src">${r.weighed?`You weighed it: ${r.weighed} g.`:b.cookedWeight?`About ${b.cookedWeight} g (est.). ${esc(b.cookedNote||"")}`:""}</span></div>
+      <div class="weigh"><input id="bdW" class="field" type="number" inputmode="numeric" min="1" placeholder="grams" value="${r.weighed||""}" aria-label="Finished dish weight in grams"><button type="button" class="btn" id="bdWSave">${r.weighed?"Update":"I weighed it"}</button>${r.weighed?'<button type="button" class="linkedit" id="bdWClear">Use estimate</button>':""}</div>
+      <div class="src">Weigh the whole finished dish (minus the pan) for an exact serving size.</div>
+    </div></div>`;
+}
+function wireBreakdown(r){
+  const run=$("bdRun"); if(run) run.onclick=async()=>{
+    try{await withBusy("AI is working out the macros…",async ctl=>{
+      $("busySub").textContent="Usually 5 to 20 seconds."; $("busySub").dataset.fixed="1";
+      const j=await post_({action:"macros",title:r.title,servings:r.servings,ingredients:r.ingredients,steps:r.steps},ctl.signal);
+      if(j.error==="bad_request") throw new Error("Update your Apps Script first to turn this on.");
+      if(j.error) throw new Error(j.message||"Couldn't work out the macros.");
+      r.breakdown=Object.assign(j.breakdown,{sig:ingSig(r)}); cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail();
+      setTimeout(()=>{const el=$("bdRun");el&&el.closest(".panel").scrollIntoView({block:"start",behavior:"smooth"})},50);
+    })}catch(e){if(e.message!=="cancel")toast(e.message)}
+  };
+  const use=$("bdUse"); if(use) use.onclick=()=>{const b=r.breakdown,sv=r.servings||1;
+    r.nutrition={calories:Math.round(b.total.calories/sv),protein:Math.round(b.total.protein/sv),carbs:Math.round(b.total.carbs/sv),fat:Math.round(b.total.fat/sv)}; r.nutritionEstimated=true;
+    cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail(); renderList(); toast("Per-serving macros updated.")};
+  const ws=$("bdWSave"); if(ws) ws.onclick=()=>{const w=Math.round(Number($("bdW").value)); if(!w||w<1){toast("Enter the weight in grams.");return}
+    r.weighed=w; cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail(); toast(`Saved. 1 serving = ${Math.round(w/(r.servings||1))} g.`)};
+  const wc=$("bdWClear"); if(wc) wc.onclick=()=>{delete r.weighed; cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail()};
+}
+
 /* ---------- detail ---------- */
 const byId=id=>recipes.find(r=>r.id===id);
 function openDetail(id){openId=id;const r=byId(id);if(!r)return;servings=r.servings||1;renderDetail();$("detail").hidden=false;$("detail").scrollTop=0}
@@ -1225,10 +1287,10 @@ function renderDetail(){
     <div class="row" style="justify-content:space-between"><span class="src">${r.image?(r.video?"Cover photo shows on your recipe list":""):"No cover photo yet"}</span><label class="linkedit" for="dCoverFile" style="cursor:pointer">${r.image?"Change cover photo":"Add a cover photo"}</label><input id="dCoverFile" type="file" accept="image/*" hidden></div>
     <div style="display:grid;gap:6px">
       <h2 class="dtitle">${esc(r.title||"Untitled recipe")}</h2>
-      <div class="meta">${r.time?`<span>${r.time} min</span>`:""}${host&&!isVideo(r.url)?`<a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(host)} ↗</a>`:""}${cooked.length?`<span>Cooked ${cooked.length}× · last ${last}</span>`:""}</div>
+      <div class="meta">${r.time?`<span>${fmtTime(r.time)}</span>`:""}${host&&!isVideo(r.url)?`<a href="${esc(r.url)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(host)} ↗</a>`:""}${cooked.length?`<span>Cooked ${cooked.length}× · last ${last}</span>`:""}</div>
       ${(r.tags||[]).length?`<div class="chips">${r.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</div>`:""}
     </div>
-    <div><div class="lbl" style="margin-bottom:6px">Per serving</div><div class="macros">${mac("calories","Cal","","cal")}${mac("protein","Protein","g")}${mac("carbs","Carbs","g")}${mac("fat","Fat","g")}</div></div>
+    <div><div class="lbl" style="margin-bottom:6px">Per serving</div><div class="macros">${mac("calories","Cal","","cal")}${mac("protein","Protein","g")}${mac("carbs","Carbs","g")}${mac("fat","Fat","g")}</div>${servingLine(r)}</div>
     <div class="actions">
       <button type="button" class="btn primary wide" id="aCook" ${(r.steps||[]).length?"":"disabled"}>Start cooking</button>
       <button type="button" class="btn" id="aCooked">I cooked this</button>
@@ -1243,6 +1305,7 @@ function renderDetail(){
       ${(r.ingredients||[]).length?`<ul class="ings">${r.ingredients.map((l,i)=>{const s=lineFor(l,f);return `<li><label><input type="checkbox" id="ing${i}"><span>${s.q?`<span class="q">${esc(s.q)}</span>`:""}${s.alt?` <span class="alt">(${esc(s.alt)})</span>`:""}${esc(s.rest)}</span></label></li>`}).join("")}</ul>`:'<div class="src">No ingredients yet. Tap Edit to add them.</div>'}
       ${f!==1?`<div class="src">Scaled from ${base} serving${base===1?"":"s"}. Macros above stay per serving.</div>`:""}
     </div>
+    ${breakdownPanel(r)}
     <div class="panel"><h3>Steps</h3>${(r.steps||[]).length?`<ol class="steps">${r.steps.map(s=>`<li><span>${esc(stepFor(s))}</span></li>`).join("")}</ol>`:'<div class="src">No steps yet. Tap Edit to add them.</div>'}</div>
     ${linksPanel(r)}
     ${r.notes?`<div class="panel"><h3>Notes</h3><div style="white-space:pre-wrap">${linkify(r.notes)}</div></div>`:""}`;
@@ -1262,6 +1325,7 @@ function renderDetail(){
   };
   $("aPdf").onclick=()=>printRecipe(r);
   $("aCap").onclick=()=>updateFromCaption(r);
+  wireBreakdown(r);
   wireParts();
   $("dCoverFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
     try{const d=await coverFromFile(f); if(!d)return; r.image=d;cache();renderDetail();renderList();enqueue({action:"saveRecipe",recipe:r});toast("Cover photo updated.")}catch(err){toast(err.message)}};
@@ -1282,7 +1346,7 @@ function openEdit(r,isNew){
   draft=r; draftNew=isNew;
   $("eHeading").textContent=isNew?"Review recipe":"Edit recipe";
   const n=r.nutrition||{};
-  $("eTitle").value=r.title||""; $("eServ").value=r.servings||""; $("eTime").value=r.time||"";
+  $("eTitle").value=r.title||""; $("eServ").value=r.servings||""; $("eTimeH").value=r.time>=60?Math.floor(r.time/60):""; $("eTimeM").value=r.time?(r.time%60||""):"";
   $("eCal").value=n.calories??""; $("ePro").value=n.protein??""; $("eCarb").value=n.carbs??""; $("eFat").value=n.fat??"";
   $("eIng").value=(r.ingredients||[]).join("\n"); $("eSteps").value=(r.steps||[]).join("\n");
   $("eNotes").value=r.notes||""; $("eLinks").value=(r.links||[]).map(l=>(l.label&&l.label!==hostOf(l.url)?l.label+" ":"")+l.url).join("\n"); $("eImg").value=String(r.image||"").startsWith("data:")?"":(r.image||""); $("eImg").placeholder=String(r.image||"").startsWith("data:")?"Using a photo you added":""; $("eUrl").value=r.url||""; $("eVideo").value=r.video||""; $("eVideo2").value=r.video2||"";
@@ -1317,7 +1381,7 @@ $("eSave").onclick=()=>{
   const lines=id=>$(id).value.split("\n").map(s=>s.trim()).filter(Boolean);
   const n0=draft.nutrition||{}; if(["eCal","ePro","eCarb","eFat"].some((id,i)=>num(id)!==(n0[["calories","protein","carbs","fat"][i]]??null))) draft.nutritionEstimated=false;
   const imgField=$("eImg").value.trim(), keepImg=String(draft.image||"").startsWith("data:")?draft.image:"";
-  Object.assign(draft,{title:$("eTitle").value.trim()||"Untitled recipe",servings:num("eServ"),time:num("eTime"),
+  Object.assign(draft,{title:$("eTitle").value.trim()||"Untitled recipe",servings:num("eServ"),time:((Number($("eTimeH").value)||0)*60+(Number($("eTimeM").value)||0))||null,
     nutrition:{calories:num("eCal"),protein:num("ePro"),carbs:num("eCarb"),fat:num("eFat")},
     ingredients:lines("eIng"),steps:lines("eSteps"),notes:$("eNotes").value.trim(),links:parseLinks($("eLinks").value),image:imgField||keepImg,url:$("eUrl").value.trim()});
   delete draft.byAI; delete draft.usedCaption; delete draft.aiUpdated;
