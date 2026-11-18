@@ -264,6 +264,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
         <button type="button" data-v="grocery"><b>Grocery list</b><span id="menuGroc">Ingredients for the store</span></button>
         <hr>
         <button type="button" id="aiMenu"><b>AI reading</b><span id="aiMenuSub">Set up your free Gemini key</span></button>
+        <button type="button" id="ghMenu"><b>Send to Lose It</b><span id="ghMenuSub">One-time setup</span></button>
         <hr>
         <a href="./"><b>Daily Ledger ↗</b><span>Back to your habits</span></a>
       </div>
@@ -385,6 +386,32 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 </section>
 
 <!-- AI SETUP -->
+<section class="sheet" id="ghSheet" hidden aria-label="Send to Lose It">
+  <div class="sheetbar"><button type="button" class="iconbtn" id="ghBack">&larr; Recipes</button><b>Send to Lose It</b><span style="width:60px"></span></div>
+  <div class="sheetbody">
+    <div class="notice" id="ghState"></div>
+    <div class="panel">
+      <h3>How it works</h3>
+      <p style="margin:0">Tap <b>Send to Lose It</b> on a recipe. The app puts a simple page for it on your site and copies the link. In Lose It, tap <b>Create Recipe → Enter from Website</b> and paste. Lose It builds the recipe for you.</p>
+      <p class="src" style="margin:0">The pages are public but hidden from search engines, so only someone with the link would find them.</p>
+    </div>
+    <div class="panel">
+      <h3>One-time setup (5 minutes, on your computer)</h3>
+      <ol style="margin:0;padding-left:18px;display:grid;gap:6px">
+        <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="color:var(--accent)">github.com/settings/personal-access-tokens/new</a> and sign in.</li>
+        <li><b>Token name:</b> Recipes to Lose It. <b>Expiration:</b> pick the longest option.</li>
+        <li><b>Repository access:</b> Only select repositories → <b>ledger</b>.</li>
+        <li><b>Permissions:</b> Repository permissions → <b>Contents</b> → <b>Read and write</b>.</li>
+        <li>Tap <b>Generate token</b>, copy it (it starts with <span class="num">github_pat_</span>) and paste it below.</li>
+      </ol>
+      <div class="row"><input id="ghKey" class="field" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste your GitHub token"><button type="button" class="btn primary" id="ghSave">Save</button></div>
+      <div class="err" id="ghErr" hidden></div>
+      <div class="src">The token is stored in your Google Sheet's script settings, not in this app, and it can only change your ledger site.</div>
+      <button type="button" class="btn danger" id="ghRemove" hidden style="justify-self:start">Remove token</button>
+    </div>
+  </div>
+</section>
+
 <section class="sheet" id="aiSheet" hidden aria-label="AI reading">
   <div class="sheetbar"><button type="button" class="iconbtn" id="aiBack">&larr; Recipes</button><b>AI reading</b><span style="width:60px"></span></div>
   <div class="sheetbody">
@@ -428,6 +455,13 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
   <div class="row" style="justify-content:space-between"><button type="button" class="btn" id="capPaste">Paste</button><a class="linkedit" id="capOpen" href="#" target="_blank" rel="noopener">Open ↗</a></div>
   <button type="button" class="btn primary" id="capUse">Use this text</button>
   <div class="row" style="justify-content:space-between"><button type="button" class="btn" id="capSkip" style="background:none;border:0;color:var(--muted)">Continue without</button><button type="button" class="btn" id="capCancel" style="background:none;border:0;color:var(--muted)">Cancel</button></div>
+</div></div>
+<div class="busy" id="liDlg" hidden role="dialog" aria-label="Ready for Lose It"><div class="busycard capcard">
+  <b style="font-size:17px" id="liHead">Ready for Lose It</b>
+  <span class="src" id="liMsg" style="text-align:left"></span>
+  <input id="liUrl" class="field" type="text" readonly>
+  <button type="button" class="btn primary" id="liCopy">Copy link</button>
+  <button type="button" class="btn" id="liClose" style="background:none;border:0;color:var(--muted)">Done</button>
 </div></div>
 <div class="busy" id="busy" hidden role="status"><div class="busycard"><span class="spin" style="width:22px;height:22px"></span><b id="busyTitle">AI is watching the video…</b><span class="num" id="busyTime">0:00</span><span class="src" id="busySub">Usually 30 seconds to 2 minutes. Keep the app open and your screen on.</span><button type="button" class="btn" id="busyCancel">Cancel</button></div></div>
 
@@ -477,7 +511,7 @@ const LS="recipes.v1";
 function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 
-let aiReady=lsGet(LS+".ai")===true;
+let aiReady=lsGet(LS+".ai")===true, ghReady=lsGet(LS+".gh")===true;
 let recipes=[], grocery=[], filterTag="All", query="", openId=null, servings=null;
 const cached=lsGet(LS); if(cached){recipes=cached.recipes||[];grocery=cached.grocery||[]}
 const cache=()=>lsSet(LS,{recipes,grocery});
@@ -523,7 +557,7 @@ async function load(){
     recipes=j.recipes||[];
     queue.forEach(q=>{if(q.action==="saveRecipe"){const i=recipes.findIndex(r=>r.id===q.recipe.id);if(i>=0)recipes[i]=q.recipe;else recipes.unshift(q.recipe)}
       if(q.action==="deleteRecipe")recipes=recipes.filter(r=>r.id!==q.id);
-      if(q.action==="saveGrocery")j.grocery=q.items}); grocery=j.grocery||[]; aiReady=!!j.aiReady; lsSet(LS+".ai",aiReady); cache(); renderAll(); renderAi();
+      if(q.action==="saveGrocery")j.grocery=q.items}); grocery=j.grocery||[]; aiReady=!!j.aiReady; lsSet(LS+".ai",aiReady); if("ghReady" in j){ghReady=!!j.ghReady;lsSet(LS+".gh",ghReady)} cache(); renderAll(); renderAi(); renderGh();
     $("status").textContent="Synced "+new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
   }catch(e){$("status").textContent=String(e.message).includes("bad_request")?"Update your Apps Script to turn on recipes.":"Offline. Showing saved copy."}
 }
@@ -1293,7 +1327,7 @@ function loseItText(r){
   const parts=plateParts(r), multi=parts.length>1, unit=wUnit==="g"?"100 g":"1 oz", base=perBase();
   const foods=parts.map(p=>{const k=x=>r1(x/p.weight*base);
     return `${r.title}${multi?" – "+p.name:""}\nServing size: ${unit}\nCalories: ${k(p.total.calories)}\nProtein: ${k(p.total.protein)} g\nCarbs: ${k(p.total.carbs)} g\nFat: ${k(p.total.fat)} g`});
-  return foods.join("\n\n")+`\n\nIn Lose It: Create Food${multi?" (one for each part)":""}, enter the name, set the serving to ${unit}, add these numbers. Log by weight.`;
+  return foods.join("\n\n")+`\n\nIn Lose It: Profile → Custom Foods → +${multi?" (one for each part)":""}. Enter the name, set the serving to ${unit}, add these numbers, then log by weight.`;
 }
 function breakdownPanel(r){
   const b=r.breakdown, sv=r.servings||1, f=x=>x==null?"–":x;
@@ -1351,8 +1385,60 @@ function wireBreakdown(r){
 async function copyLoseIt(r){
   const parts=plateParts(r);
   if(parts.some(p=>!p.weight||!p.total)){bdTab="cooked";renderDetail();toast("Work out the macros first (Macros → Ingredients).");return}
-  try{await navigator.clipboard.writeText(loseItText(r));toast(parts.length>1?`Copied ${parts.length} foods. In Lose It: Create Food for each, then log by weight.`:"Copied. In Lose It: Create Food, paste in the numbers, then log by weight.")}
+  try{await navigator.clipboard.writeText(loseItText(r));toast(parts.length>1?`Copied ${parts.length} foods. In Lose It: Profile → Custom Foods → + for each.`:"Copied. In Lose It: Profile → Custom Foods → +, then enter the numbers.")}
   catch(e){toast("Couldn't copy. Try again.")}
+}
+
+/* ---------- Send to Lose It: publish a page Lose It's "Enter from Website" can read ---------- */
+function renderGh(){
+  $("ghMenuSub").textContent=ghReady?"On · tap a recipe, then Send to Lose It":"One-time setup";
+  $("ghState").className="notice"+(ghReady?"":" warn");
+  $("ghState").textContent=ghReady?"Sending to Lose It is on.":"Not set up yet. Follow the steps below once.";
+  $("ghRemove").hidden=!ghReady;
+}
+$("ghMenu").onclick=()=>{closeMenu();renderGh();$("ghSheet").hidden=false};
+$("ghBack").onclick=()=>{$("ghSheet").hidden=true};
+async function saveGh(t){
+  const err=$("ghErr"); err.hidden=true; $("ghSave").disabled=true; $("ghSave").textContent="Checking…";
+  try{const j=await post({action:"setGithub",token:t});
+    if(j.error==="bad_request"||(!j.error&&!("ghReady" in j))) throw new Error("Update your Apps Script first, then try again.");
+    if(j.error) throw new Error(j.message||"That token didn't work.");
+    ghReady=!!j.ghReady; lsSet(LS+".gh",ghReady); $("ghKey").value=""; renderGh(); toast(ghReady?"Sending to Lose It is on.":"Token removed.");
+  }catch(e){err.textContent=e.message;err.hidden=false}
+  finally{$("ghSave").disabled=false;$("ghSave").textContent="Save"}
+}
+$("ghSave").onclick=()=>{const t=$("ghKey").value.trim();if(t)saveGh(t)};
+$("ghRemove").onclick=()=>saveGh("");
+async function sendToLoseIt(r){
+  if(!ghReady){renderGh();$("ghSheet").hidden=false;toast("Set this up once first.");return}
+  if(!(r.ingredients||[]).length){toast("Add ingredients first.");return}
+  let url="";
+  try{
+    await withBusy("Making the Lose It page…",async ctl=>{
+      $("busySub").dataset.fixed="1"; $("busySub").textContent="Saving it to your site…";
+      const j=await post_({action:"publishRecipe",recipe:{id:r.id,title:r.title,servings:r.servings,time:r.time,ingredients:r.ingredients,steps:r.steps,nutrition:r.nutrition}},ctl.signal);
+      if(j.error==="bad_request"||(!j.error&&!j.url)) throw new Error("Update your Apps Script first.");
+      if(j.error) throw new Error(j.message||"Couldn't make the page.");
+      url=j.url;
+      // GitHub takes about a minute to put the page live: wait until it loads
+      const t0=Date.now();
+      for(;;){
+        if(ctl.signal.aborted) throw new Error("cancel");
+        const s=Math.round((Date.now()-t0)/1000);
+        $("busySub").textContent=`Waiting for your site to update (usually under a minute)… ${s}s`;
+        try{const res=await fetch(url+"?v="+Date.now(),{cache:"no-store",signal:ctl.signal}); if(res.ok&&(await res.text()).includes('content="'+j.v+'"'))break;}catch(e){if(ctl.signal.aborted)throw new Error("cancel")}
+        if(s>150) break;   // show the link anyway; it should be live shortly
+        await sleep(4000);
+      }
+    });
+  }catch(e){if(e.message!=="cancel")toast(e.message);if(!url)return}
+  if(!url) return;
+  r.loseItUrl=url; cache(); enqueue({action:"saveRecipe",recipe:r});
+  $("liUrl").value=url;
+  $("liMsg").innerHTML="In Lose It: tap <b>Create Recipe → Enter from Website</b>, paste the link, then check the ingredient matches (for example, pasta should be dry, not cooked).";
+  $("liCopy").textContent="Copy link"; $("liDlg").hidden=false;
+  $("liCopy").onclick=async()=>{try{await navigator.clipboard.writeText(url);$("liCopy").textContent="Copied ✓"}catch(e){$("liUrl").select();toast("Hold the link and choose Copy.")}};
+  $("liClose").onclick=()=>{$("liDlg").hidden=true};
 }
 
 /* ---------- detail ---------- */
@@ -1379,7 +1465,7 @@ function renderDetail(){
       <button type="button" class="btn primary wide" id="aCook" ${(r.steps||[]).length?"":"disabled"}>Start cooking</button>
       <button type="button" class="btn" id="aCooked">I cooked this</button>
       <button type="button" class="btn" id="aGroc">Add to grocery list</button>
-      <button type="button" class="btn" id="aLoseIt">${r.url&&!isVideo(r.url)?"Copy link for Lose It":"Copy for Lose It"}</button>
+      <button type="button" class="btn primary" id="aLoseIt">Send to Lose It</button>
       <button type="button" class="btn" id="aPdf">Save as PDF</button>
       <button type="button" class="btn wide" id="aCap">Update from a caption or text</button>
     </div>
@@ -1413,11 +1499,8 @@ function renderDetail(){
   wireParts();
   $("dCoverFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
     try{const d=await coverFromFile(f); if(!d)return; r.image=d;cache();renderDetail();renderList();enqueue({action:"saveRecipe",recipe:r});toast("Cover photo updated.")}catch(err){toast(err.message)}};
-  $("aLoseIt").onclick=async()=>{
-    if(!r.url||isVideo(r.url)){copyLoseIt(r);return}   // no website to import: copy the numbers for Create Food
-    try{await navigator.clipboard.writeText(r.url);toast("Link copied. In Lose It: Create Recipe → Enter from Website → paste.")}
-    catch(e){toast("Couldn't copy. Long-press the site link above to copy it.")}
-  };
+  $("aLoseIt").onclick=()=>sendToLoseIt(r);
+
 }
 $("dBack").onclick=()=>{$("detail").hidden=true;openId=null};
 $("dFav").onclick=()=>{const r=byId(openId);r.fav=!r.fav;cache();renderDetail();renderList();enqueue({action:"saveRecipe",recipe:r})};
