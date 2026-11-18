@@ -560,11 +560,11 @@ const isVideo=u=>!!videoInfo(u);
 function videoBlock(r){
   const v2=videoInfo(r.video2);
   if(!v2) return videoOne(r.video,r);
-  return `<div class="parts" role="group" aria-label="Video part"><button type="button" data-part="0" aria-pressed="true">Part 1</button><button type="button" data-part="1" aria-pressed="false">Part 2</button></div>
+  return `<div class="parts" id="vparts" role="group" aria-label="Video part"><button type="button" data-part="0" aria-pressed="true">Part 1</button><button type="button" data-part="1" aria-pressed="false">Part 2</button></div>
     <div class="vcar" id="vcar"><div class="vslide">${videoOne(r.video,r)}</div><div class="vslide">${videoOne(r.video2,r)}</div></div>`;
 }
 function wireParts(){
-  const car=$("vcar"); if(!car) return; const btns=[...document.querySelectorAll(".parts button")];
+  const car=$("vcar"); if(!car) return; const btns=[...document.querySelectorAll("#vparts button")];
   const mark=i=>btns.forEach((b,j)=>b.setAttribute("aria-pressed",String(i===j)));
   btns.forEach(b=>b.onclick=()=>{const i=Number(b.dataset.part);car.scrollTo({left:i*(car.clientWidth+12),behavior:"smooth"});mark(i)});
   car.addEventListener("scroll",()=>mark(Math.round(car.scrollLeft/(car.clientWidth+12))),{passive:true});
@@ -1263,7 +1263,7 @@ function breakdownPanel(r){
         <div class="src" style="margin-top:-4px">Per 100 g of the cooked dish. Whole dish ${r.weighed?"":"≈ "}${w} g · 1 serving ≈ ${per} g${r.weighed?"":" (est.)"}.</div>
         <div class="calc"><label for="bdG" class="lbl">How much are you eating?</label>
           <div class="weigh"><input id="bdG" class="field" type="number" inputmode="decimal" min="0" value="${per}" aria-label="Grams"><span>g</span></div>
-          <div class="calcout num" id="bdOut"></div></div>`;
+          <div class="calcout" id="bdOut"></div></div>`;
     }
     body+=`<div style="display:grid;gap:6px;border-top:1px solid var(--line);padding-top:10px">
       <div><b>Cooked weight</b> <span class="src">${r.weighed?`You weighed it: ${r.weighed} g.`:b&&b.cookedWeight?`About ${b.cookedWeight} g (est.). ${esc(b.cookedNote||"")}`:"Not weighed yet."}</span></div>
