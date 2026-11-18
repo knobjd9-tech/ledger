@@ -835,7 +835,7 @@ function shrinkImage(file,max,q){return new Promise(res=>{
   const img=new Image(); img.onload=()=>{const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);
     c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);res(c.toDataURL("image/jpeg",q))};
   img.onerror=()=>res(""); img.src=URL.createObjectURL(file)})}
-async function prepFile(f,many){
+async function prepFile(f,many,slim){
   if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)){
     if(f.size>20*1024*1024) throw new Error(`“${f.name}” is ${Math.round(f.size/1048576)} MB. PDFs need to be under 20 MB.`);
     return {data:await readB64(f),mime:"application/pdf",thumb:"",size:f.size};
@@ -844,9 +844,55 @@ async function prepFile(f,many){
     const data=await shrinkImage(f,many?1100:1400,many?.72:.78); if(!data) throw new Error(`Couldn't open the photo “${f.name}”.`);
     return {data,mime:"image/jpeg",thumb:await shrinkImage(f,320,.55),size:data.length*.75};
   }
-  if(f.size>MAXMB*1024*1024) throw new Error(`“${f.name}” is ${Math.round(f.size/1048576)} MB. Trim videos under ${MAXMB} MB (about a minute).`);
+  if(slim||f.size>BIGVID*1024*1024) return slimVideo(f);   // big video: send frames + audio instead
   const [data,thumb]=await Promise.all([readB64(f),frameOf(f)]);
   return {data,mime:f.type||"video/mp4",thumb,size:f.size};
+}
+/* A big video becomes still frames (one every couple of seconds) plus its sound as a small audio file.
+   The AI only samples about one frame a second anyway, so it reads it just as well, at a fraction of the size. */
+const BIGVID=20;
+let slimNote=null;   // shows progress on the waiting screen
+async function slimVideo(f){
+  if(f.size>600*1024*1024) throw new Error(`“${f.name}” is ${Math.round(f.size/1048576)} MB, which is too big for a phone to process. Trim it first.`);
+  const say=t=>{if(slimNote)slimNote(t)};
+  say("Shrinking the big video… (reading frames)");
+  const frames=await framesOf(f,p=>say(`Shrinking the big video… ${p}%`));
+  if(!frames.list.length) throw new Error(`Couldn't open “${f.name}”. Try saving it again, or trim it under ${BIGVID} MB.`);
+  say("Shrinking the big video… (reading the sound)");
+  let audio=null; try{audio=await audioOf(f)}catch(e){}
+  const out=frames.list.map((d,i)=>({data:d,mime:"image/jpeg",thumb:i===0?frames.thumb:"",size:d.length*.75}));
+  if(audio) out.push({data:audio,mime:"audio/wav",thumb:"",size:audio.length*.75});
+  out[0].note=`“${f.name}” was sent as ${frames.list.length} frames (one every ${frames.step}s, in order)${audio?" plus its audio track":" (no audio could be read)"}.`;
+  return out;
+}
+function framesOf(file,progress){return new Promise(res=>{
+  const v=document.createElement("video"); v.muted=true; v.playsInline=true; v.preload="auto"; v.src=URL.createObjectURL(file);
+  const list=[]; let times=[], i=0, thumb="", step=2, finished=false;
+  const done=()=>{if(finished)return;finished=true;try{URL.revokeObjectURL(v.src)}catch(e){}res({list,thumb,step})};
+  const grab=()=>{try{const w=Math.min(720,v.videoWidth||720),h=Math.round(w*(v.videoHeight||1280)/(v.videoWidth||720));
+      const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(v,0,0,w,h);list.push(c.toDataURL("image/jpeg",.62));
+      if(!thumb){const t=document.createElement("canvas");t.width=320;t.height=Math.round(320*h/w);t.getContext("2d").drawImage(v,0,0,t.width,t.height);thumb=t.toDataURL("image/jpeg",.55)}}catch(e){}
+    i++; progress&&progress(Math.round(100*i/times.length));
+    if(i<times.length) v.currentTime=times[i]; else done()};
+  v.onloadedmetadata=()=>{const d=v.duration; if(!isFinite(d)||!d){done();return}
+    step=Math.max(2,Math.ceil(d/45)); for(let t=0.5;t<d;t+=step) times.push(t); if(!times.length) times=[0];
+    v.onseeked=grab; v.currentTime=times[0]};
+  v.onerror=done; setTimeout(done,120000);
+})}
+async function audioOf(file){
+  const AC=window.AudioContext||window.webkitAudioContext, ctx=new AC();
+  const buf=await new Promise((ok,bad)=>{file.arrayBuffer().then(ab=>ctx.decodeAudioData(ab,ok,bad)).catch(bad)});
+  try{ctx.close()}catch(e){}
+  const rate=16000, len=Math.ceil(buf.duration*rate), off=new OfflineAudioContext(1,len,rate);
+  const src=off.createBufferSource(); src.buffer=buf; src.connect(off.destination); src.start();
+  const pcm=(await off.startRendering()).getChannelData(0);
+  const bytes=new Uint8Array(44+pcm.length*2), dv=new DataView(bytes.buffer);
+  const str=(o,t)=>{for(let k=0;k<t.length;k++)dv.setUint8(o+k,t.charCodeAt(k))};
+  str(0,"RIFF");dv.setUint32(4,36+pcm.length*2,true);str(8,"WAVE");str(12,"fmt ");dv.setUint32(16,16,true);dv.setUint16(20,1,true);dv.setUint16(22,1,true);
+  dv.setUint32(24,rate,true);dv.setUint32(28,rate*2,true);dv.setUint16(32,2,true);dv.setUint16(34,16,true);str(36,"data");dv.setUint32(40,pcm.length*2,true);
+  for(let k=0;k<pcm.length;k++){const x=Math.max(-1,Math.min(1,pcm[k]));dv.setInt16(44+k*2,x<0?x*32768:x*32767,true)}
+  let bin=""; for(let k=0;k<bytes.length;k+=32768) bin+=String.fromCharCode.apply(null,bytes.subarray(k,k+32768));
+  return "data:audio/wav;base64,"+btoa(bin);
 }
 function tidyTags(r){const t=new Set((r.tags||[]).filter(x=>PRESET_TAGS.includes(x))); if((r.nutrition||{}).protein>=30)t.add("High protein"); if(r.time&&r.time<=30)t.add("Quick"); r.tags=[...t]; return r}
 
@@ -906,12 +952,18 @@ async function scanOne(files,merge,extra){
   try{
     await withBusy(title,async ctl=>{
       $("busySub").textContent="Getting your files ready…";
-      const prepped=await Promise.all(files.map(f=>prepFile(f,files.length>2)));
+      slimNote=t=>{$("busySub").textContent=t};
+      // keep raw videos under ~30 MB together: shrink the biggest ones first
+      const vids=files.filter(f=>/^video/.test(f.type)&&f.size<=BIGVID*1024*1024).sort((a,b)=>b.size-a.size), slimSet=new Set();
+      let raw=vids.reduce((a,f)=>a+f.size,0); for(const f of vids){if(raw<=30*1024*1024)break; slimSet.add(f); raw-=f.size}
+      const prepped=[]; for(const f of files) prepped.push(...[].concat(await prepFile(f,files.length>2,slimSet.has(f))));   // one at a time keeps phone memory low
+      slimNote=null;
       const total=prepped.reduce((a,x)=>a+x.size,0);
       if(total>(files.length>1?34:MAXMB)*1024*1024) throw new Error(`Those files add up to ${Math.round(total/1048576)} MB. Keep it under ${files.length>1?34:MAXMB} MB together, or import them as separate recipes.`);
       $("busySub").textContent="Usually 30 seconds to 2 minutes. Keep the app open and your screen on.";
       const req={files:prepped.map(x=>({data:x.data,mime:x.mime}))};
-      if(extra.url) req.url=extra.url; if(extra.text) req.text=extra.text;
+      const notes=prepped.map(x=>x.note).filter(Boolean);
+      if(extra.url) req.url=extra.url; if(extra.text||notes.length) req.text=[notes.join(" "),extra.text].filter(Boolean).join("\n\n");
       if(extra.captionChecked){req.captionChecked=true; req.caption=extra.caption||"";}
       let r; try{r=await aiCall(req,ctl)}catch(e){ if(e.reason!=="rate"&&e.reason!=="busy") throw e; $("busySub").textContent="Google asked us to slow down. Trying again in a few seconds…"; await sleep(10000); r=await aiCall(req,ctl) }
       const thumb=(prepped.find(x=>x.thumb)||{}).thumb||r.postImage||""; delete r.postImage;
@@ -938,7 +990,7 @@ async function scanMany(files){
           if(working>=limit){await sleep(400);continue}
           const f=files[next++]; working++; show();
           try{
-            const x=await prepFile(f,true), req={files:[{data:x.data,mime:x.mime}]};
+            const xs=[].concat(await prepFile(f,true)), x=xs[0], req={files:xs.map(y=>({data:y.data,mime:y.mime}))}; if(x.note) req.text=x.note;
             let r=null;
             for(let attempt=1;;attempt++){
               try{r=await aiCall(req,ctl);break}
