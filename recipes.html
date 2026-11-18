@@ -111,7 +111,10 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .bd li.tot{border-top:2px solid var(--line)}
 .bd li.tot .bl{font-weight:700}
 .weigh{display:flex;gap:8px;align-items:center;flex-wrap:nowrap}
-.weigh .field{width:120px;flex:none}
+.weigh .field{width:110px;flex:none}
+.units{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.units button{background:none;border:0;padding:6px 14px;font-weight:700;font-size:14px;color:var(--muted)}
+.units button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
 .calc{display:grid;gap:6px;background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .calcout{font-size:15px;color:var(--muted)}
 .calcout b{color:var(--accent);font-family:var(--display);font-weight:800;font-size:20px}
@@ -1244,6 +1247,54 @@ let bdTab=(()=>{try{return localStorage.getItem("recipes.v1.bdTab")||"ing"}catch
 function dishTotals(r){const n=r.nutrition||{}, sv=r.servings||1;
   if(n.calories!=null) return {calories:n.calories*sv,protein:(n.protein||0)*sv,carbs:(n.carbs||0)*sv,fat:(n.fat||0)*sv};
   return r.breakdown?r.breakdown.total:null}
+/* weights: grams inside, shown in g, oz or lb */
+const UNITS={g:1,oz:28.3495,lb:453.592};
+let wUnit=(()=>{try{return localStorage.getItem("recipes.v1.unit")||"g"}catch(e){return "g"}})();
+const fromG=(g,u)=>{u=u||wUnit; const v=g/UNITS[u]; return u==="g"?Math.round(v):u==="oz"?Math.round(v*10)/10:Math.round(v*100)/100};
+const toG=v=>Number(v)*UNITS[wUnit];
+const wtxt=g=>wUnit==="g"?`${Math.round(g)} g`:wUnit==="oz"?`${fromG(g,"oz")} oz`:`${fromG(g,"lb")} lb`;
+const perLbl=()=>wUnit==="g"?"per 100 g":"per oz";
+const perBase=()=>wUnit==="g"?100:UNITS.oz;
+const r1=x=>x>=10?Math.round(x):Math.round(x*10)/10;
+/* the parts you put on a plate (chicken, pasta…), or the whole dish as one */
+function plateParts(r){
+  const b=r.breakdown, comps=(b&&b.components)||[];
+  if(comps.length>1) return comps.map((c,i)=>{const wd=(r.weighedParts||{})[i];return {name:c.name,total:c.total,est:c.cookedWeight,weighed:wd||null,weight:wd||c.cookedWeight}});
+  return [{name:r.title||"This recipe",total:dishTotals(r),est:b?b.cookedWeight:null,weighed:r.weighed||null,weight:dishWeight(r)}];
+}
+function cookedView(r){
+  const parts=plateParts(r), sv=r.servings||1, multi=parts.length>1;
+  const unitSw=`<div class="row" style="justify-content:space-between;align-items:center"><span class="lbl">Weigh in</span><div class="units" role="group" aria-label="Units">${["g","oz","lb"].map(u=>`<button type="button" data-unit="${u}" aria-pressed="${wUnit===u}">${u}</button>`).join("")}</div></div>`;
+  if(parts.some(p=>!p.weight)) return unitSw+`<div class="src">Weigh the whole finished dish (minus the pan), or tap Ingredients → Work out the macros for an estimate.</div>`+weighBox(r,parts);
+  if(parts.some(p=>!p.total)) return unitSw+`<div class="src">Add the macros first (Edit, or Ingredients → Work out the macros).</div>`+weighBox(r,parts);
+  const cube=(v,l,c)=>`<span class="cube ${c||""}"><b>${v}</b><i>${l}</i></span>`;
+  const blocks=parts.map((p,i)=>{const k=x=>r1(x/p.weight*perBase());
+    return `<div class="calc">
+      <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:nowrap;gap:8px"><b>${multi?esc(p.name):"How much are you eating?"}</b><span class="cubes">${cube(k(p.total.calories),"cal","cal")}${cube(k(p.total.protein)+"g","protein")}</span></div>
+      <div class="src" style="margin-top:-2px">${perLbl()} · ${k(p.total.carbs)}g carbs · ${k(p.total.fat)}g fat · ${multi?"cooked "+p.name.toLowerCase()+" ":"whole dish "}${p.weighed?"":"≈ "}${wtxt(p.weight)}</div>
+      <div class="weigh"><input class="field" type="number" inputmode="decimal" min="0" step="any" data-amt="${i}" value="${fromG(p.weight/sv)}" aria-label="${esc(p.name)} amount in ${wUnit}"><span>${wUnit}</span>${multi?`<span class="src" data-pout="${i}"></span>`:""}</div>
+    </div>`}).join("");
+  const note=r.breakdown&&!r.breakdown.components&&(r.ingredients||[]).length>3?'<div class="src">Tip: tap Ingredients → Redo to split this into parts (like chicken and pasta) so you can enter each one.</div>':"";
+  return `${unitSw}${note}${blocks}
+    <div class="calcout" id="bdOut"></div>
+    <div class="src" style="margin-top:-6px">Starts at 1 serving${multi?" of each part":""}${parts.some(p=>!p.weighed)?" (estimated cooked weight)":""}. Change ${multi?"any amount":"it"} to match your plate.</div>
+    <button type="button" class="btn primary" id="bdCopy">Copy for Lose It</button>
+    ${weighBox(r,parts)}`;
+}
+function weighBox(r,parts){
+  const multi=parts.length>1, b=r.breakdown;
+  return `<div style="display:grid;gap:8px;border-top:1px solid var(--line);padding-top:10px">
+    <div><b>Cooked weight</b> <span class="src">${multi?"Weigh each part after cooking for exact numbers.":r.weighed?`You weighed it: ${wtxt(r.weighed)}.`:b&&b.cookedWeight?`About ${wtxt(b.cookedWeight)} (est.). ${esc(b.cookedNote||"")}`:"Not weighed yet."}</span></div>
+    ${parts.map((p,i)=>`<div class="weigh">${multi?`<span style="flex:1;min-width:0">${esc(p.name)}${p.weighed?"":' <span class="src">est. '+wtxt(p.est||0)+'</span>'}</span>`:""}<input class="field" type="number" inputmode="decimal" min="0" step="any" data-weigh="${i}" placeholder="${wUnit}" value="${p.weighed?fromG(p.weighed):""}" aria-label="Cooked weight of ${esc(p.name)} in ${wUnit}">${multi?`<span>${wUnit}</span>`:""}</div>`).join("")}
+    <div class="row"><button type="button" class="btn" id="bdWSave">${parts.some(p=>p.weighed)?"Update":"I weighed it"}</button>${parts.some(p=>p.weighed)?'<button type="button" class="linkedit" id="bdWClear">Use estimate</button>':""}</div>
+    <div class="src">Weigh ${multi?"each part":"the whole finished dish"} without the pan or bowl.</div></div>`;
+}
+function loseItText(r){
+  const parts=plateParts(r), multi=parts.length>1, unit=wUnit==="g"?"100 g":"1 oz", base=perBase();
+  const foods=parts.map(p=>{const k=x=>r1(x/p.weight*base);
+    return `${r.title}${multi?" – "+p.name:""}\nServing size: ${unit}\nCalories: ${k(p.total.calories)}\nProtein: ${k(p.total.protein)} g\nCarbs: ${k(p.total.carbs)} g\nFat: ${k(p.total.fat)} g`});
+  return foods.join("\n\n")+`\n\nIn Lose It: Create Food${multi?" (one for each part)":""}, enter the name, set the serving to ${unit}, add these numbers. Log by weight.`;
+}
 function breakdownPanel(r){
   const b=r.breakdown, sv=r.servings||1, f=x=>x==null?"–":x;
   const tabs=`<div class="parts" role="group" aria-label="Show"><button type="button" data-bd="ing" aria-pressed="${bdTab==="ing"}">Ingredients</button><button type="button" data-bd="cooked" aria-pressed="${bdTab==="cooked"}">Cooked</button></div>`;
@@ -1257,32 +1308,25 @@ function breakdownPanel(r){
       body=`${stale?'<div class="notice warn">The ingredients changed since this was worked out. Tap Redo to update it.</div>':""}
         <div class="src">Raw ingredients, whole recipe (AI estimate).</div>
         <ul class="bd">${b.items.map(x=>row(x.line,x)).join("")}${row("Whole recipe",t,"tot")}</ul>
-        ${differs?`<button type="button" class="btn" id="bdUse">Use these for the per-serving macros (${per.calories} cal)</button>`:""}`;
+        ${differs?`<button type="button" class="btn" id="bdUse" style="white-space:normal">Use as per-serving macros (${per.calories} cal)</button>`:""}`;
     }
-  }else{
-    const w=dishWeight(r), t=dishTotals(r);
-    if(!w) body=`<div class="src">Weigh the whole finished dish (minus the pan), or tap Ingredients → Work out the macros for an estimate.</div>`;
-    else if(!t) body=`<div class="src">Add the macros first (Edit, or Ingredients → Work out the macros).</div>`;
-    else{
-      const k=x=>Math.round(x/w*100), per=Math.round(w/sv);
-      body=`<div class="macros">${[["Cal",k(t.calories),""],["Protein",k(t.protein),"g"],["Carbs",k(t.carbs),"g"],["Fat",k(t.fat),"g"]].map(([l,v,u],i)=>`<div class="macro ${i?"":"cal"}"><span class="lbl">${l}</span><span class="v num">${v}${u}</span></div>`).join("")}</div>
-        <div class="src" style="margin-top:-4px">Per 100 g of the cooked dish. Whole dish ${r.weighed?"":"≈ "}${w} g · 1 serving ≈ ${per} g${r.weighed?"":" (est.)"}.</div>
-        <div class="calc"><label for="bdG" class="lbl">How much are you eating?</label>
-          <div class="weigh"><input id="bdG" class="field" type="number" inputmode="decimal" min="0" value="${per}" aria-label="Grams"><span>g</span></div>
-          <div class="calcout" id="bdOut"></div></div>`;
-    }
-    body+=`<div style="display:grid;gap:6px;border-top:1px solid var(--line);padding-top:10px">
-      <div><b>Cooked weight</b> <span class="src">${r.weighed?`You weighed it: ${r.weighed} g.`:b&&b.cookedWeight?`About ${b.cookedWeight} g (est.). ${esc(b.cookedNote||"")}`:"Not weighed yet."}</span></div>
-      <div class="weigh"><input id="bdW" class="field" type="number" inputmode="numeric" min="1" placeholder="grams" value="${r.weighed||""}" aria-label="Finished dish weight in grams"><button type="button" class="btn" id="bdWSave">${r.weighed?"Update":"I weighed it"}</button>${r.weighed&&b&&b.cookedWeight?'<button type="button" class="linkedit" id="bdWClear">Use estimate</button>':""}</div></div>`;
-  }
+  }else body=cookedView(r);
   return `<div class="panel" id="bdPanel"><div class="sectionhead"><h3>Macros</h3>${b&&bdTab==="ing"?'<button type="button" class="linkedit" id="bdRun">Redo</button>':""}</div>${tabs}${body}</div>`;
 }
 function wireBreakdown(r){
   document.querySelectorAll("[data-bd]").forEach(x=>x.onclick=()=>{bdTab=x.dataset.bd;try{localStorage.setItem("recipes.v1.bdTab",bdTab)}catch(e){}
     const y=$("bdPanel").getBoundingClientRect().top; renderDetail(); const p=$("bdPanel"); $("detail").scrollTop+=p.getBoundingClientRect().top-y});
-  const g=$("bdG"); if(g){const calc=()=>{const w=dishWeight(r), t=dishTotals(r), q=Number(g.value)||0, k=x=>Math.round(x*q/w);
-      $("bdOut").innerHTML=q?`<b>${k(t.calories)}</b> cal · <b>${k(t.protein)}</b>g protein · ${k(t.carbs)}g carbs · ${k(t.fat)}g fat`:"Enter grams";};
-    g.oninput=calc; calc()}
+  document.querySelectorAll("[data-unit]").forEach(x=>x.onclick=()=>{wUnit=x.dataset.unit;try{localStorage.setItem("recipes.v1.unit",wUnit)}catch(e){}
+    const y=$("bdPanel").getBoundingClientRect().top; renderDetail(); $("detail").scrollTop+=$("bdPanel").getBoundingClientRect().top-y});
+  const ins=[...document.querySelectorAll("[data-amt]")];
+  if(ins.length){const parts=plateParts(r), multi=parts.length>1;
+    const calc=()=>{const t={calories:0,protein:0,carbs:0,fat:0}; let any=false;
+      ins.forEach(el=>{const p=parts[el.dataset.amt], q=toG(el.value||0); if(q>0)any=true;
+        const add={}; ["calories","protein","carbs","fat"].forEach(k=>{add[k]=p.total[k]*q/p.weight;t[k]+=add[k]});
+        const o=document.querySelector(`[data-pout="${el.dataset.amt}"]`); if(o) o.textContent=q?`${Math.round(add.calories)} cal · ${Math.round(add.protein)}g protein`:"";});
+      $("bdOut").innerHTML=any?`${multi?'<span class="lbl" style="display:block;margin-bottom:2px">Your plate</span>':""}<b>${Math.round(t.calories)}</b> cal · <b>${Math.round(t.protein)}</b>g protein · ${Math.round(t.carbs)}g carbs · ${Math.round(t.fat)}g fat`:"Enter an amount";};
+    ins.forEach(el=>el.oninput=calc); calc()}
+  const cp=$("bdCopy"); if(cp) cp.onclick=()=>copyLoseIt(r);
   const run=$("bdRun"); if(run) run.onclick=async()=>{
     try{await withBusy("AI is working out the macros…",async ctl=>{
       $("busySub").textContent="Usually 5 to 20 seconds."; $("busySub").dataset.fixed="1";
@@ -1296,9 +1340,19 @@ function wireBreakdown(r){
   const use=$("bdUse"); if(use) use.onclick=()=>{const b=r.breakdown,sv=r.servings||1;
     r.nutrition={calories:Math.round(b.total.calories/sv),protein:Math.round(b.total.protein/sv),carbs:Math.round(b.total.carbs/sv),fat:Math.round(b.total.fat/sv)}; r.nutritionEstimated=true;
     cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail(); renderList(); toast("Per-serving macros updated.")};
-  const ws=$("bdWSave"); if(ws) ws.onclick=()=>{const w=Math.round(Number($("bdW").value)); if(!w||w<1){toast("Enter the weight in grams.");return}
-    r.weighed=w; cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail(); toast(`Saved. 1 serving = ${Math.round(w/(r.servings||1))} g.`)};
-  const wc=$("bdWClear"); if(wc) wc.onclick=()=>{delete r.weighed; cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail()};
+  const ws=$("bdWSave"); if(ws) ws.onclick=()=>{
+    const parts=plateParts(r), multi=parts.length>1, vals=[...document.querySelectorAll("[data-weigh]")].map(el=>Math.round(toG(el.value||0)));
+    if(!vals.some(v=>v>0)){toast(`Enter the weight in ${wUnit}.`);return}
+    if(multi){r.weighedParts={}; vals.forEach((v,i)=>{if(v>0)r.weighedParts[i]=v})} else r.weighed=vals[0];
+    cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail();
+    toast(multi?"Saved your weights.":`Saved. 1 serving = ${wtxt(vals[0]/(r.servings||1))}.`)};
+  const wc=$("bdWClear"); if(wc) wc.onclick=()=>{delete r.weighed; delete r.weighedParts; cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail()};
+}
+async function copyLoseIt(r){
+  const parts=plateParts(r);
+  if(parts.some(p=>!p.weight||!p.total)){bdTab="cooked";renderDetail();toast("Work out the macros first (Macros → Ingredients).");return}
+  try{await navigator.clipboard.writeText(loseItText(r));toast(parts.length>1?`Copied ${parts.length} foods. In Lose It: Create Food for each, then log by weight.`:"Copied. In Lose It: Create Food, paste in the numbers, then log by weight.")}
+  catch(e){toast("Couldn't copy. Try again.")}
 }
 
 /* ---------- detail ---------- */
@@ -1325,7 +1379,7 @@ function renderDetail(){
       <button type="button" class="btn primary wide" id="aCook" ${(r.steps||[]).length?"":"disabled"}>Start cooking</button>
       <button type="button" class="btn" id="aCooked">I cooked this</button>
       <button type="button" class="btn" id="aGroc">Add to grocery list</button>
-      <button type="button" class="btn" id="aLoseIt">Copy link for Lose It</button>
+      <button type="button" class="btn" id="aLoseIt">${r.url&&!isVideo(r.url)?"Copy link for Lose It":"Copy for Lose It"}</button>
       <button type="button" class="btn" id="aPdf">Save as PDF</button>
       <button type="button" class="btn wide" id="aCap">Update from a caption or text</button>
     </div>
@@ -1360,8 +1414,7 @@ function renderDetail(){
   $("dCoverFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
     try{const d=await coverFromFile(f); if(!d)return; r.image=d;cache();renderDetail();renderList();enqueue({action:"saveRecipe",recipe:r});toast("Cover photo updated.")}catch(err){toast(err.message)}};
   $("aLoseIt").onclick=async()=>{
-    if(!r.url){toast("This one came from an uploaded video, so there's no link. In Lose It, use Create Recipe and add the ingredients.");return}
-    if(isVideo(r.url)){toast(`Lose It can't read ${videoInfo(r.url).kind} links. Paste the creator's written-recipe link into Edit → Recipe link first.`);return}
+    if(!r.url||isVideo(r.url)){copyLoseIt(r);return}   // no website to import: copy the numbers for Create Food
     try{await navigator.clipboard.writeText(r.url);toast("Link copied. In Lose It: Create Recipe → Enter from Website → paste.")}
     catch(e){toast("Couldn't copy. Long-press the site link above to copy it.")}
   };
