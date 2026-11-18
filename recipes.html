@@ -97,7 +97,13 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .servw{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin-top:8px;font-size:14px;color:var(--muted)}
 .servw b{color:var(--ink);font-family:var(--display);font-weight:800}
 .bd{list-style:none;margin:0;padding:0;display:grid}
-.bd li{display:grid;gap:2px;padding:9px 0;border-top:1px solid var(--line)}
+.bd li{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+.cubes{display:flex;gap:6px}
+.cube{width:58px;height:46px;display:grid;place-content:center;text-align:center;background:var(--raised);border:1px solid var(--line);border-radius:9px;line-height:1.1}
+.cube b{font-family:var(--display);font-weight:800;font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums}
+.cube i{font-style:normal;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.cube.cal b{color:var(--accent)}
+.bd li.tot .cube{background:rgba(47,123,255,.12);border-color:rgba(47,123,255,.35)}
 .bd li:first-child{border-top:0}
 .bd .bl{font-size:15px}
 .bd .bn{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -1245,12 +1251,12 @@ function breakdownPanel(r){
   if(bdTab==="ing"){
     if(!b) body=`<div class="src">See calories, protein, carbs and fat for each raw ingredient. Takes about 10 seconds, then it's saved.</div><button type="button" class="btn primary" id="bdRun" ${(r.ingredients||[]).length?"":"disabled"}>Work out the macros</button>`;
     else{
-      const t=b.total, row=(l,x,cls)=>`<li class="${cls||""}"><span class="bl">${esc(l)}</span><span class="bn">${x.grams!=null?`${x.grams} g · `:""}<b>${f(x.calories)}</b> cal · ${f(x.protein)}g P · ${f(x.carbs)}g C · ${f(x.fat)}g F</span></li>`;
+      const t=b.total, row=(l,x,cls)=>`<li class="${cls||""}"><span class="bl">${esc(l)}</span><span class="cubes"><span class="cube cal"><b>${f(x.calories)}</b><i>cal</i></span><span class="cube"><b>${f(x.protein)}${x.protein==null?"":"g"}</b><i>protein</i></span></span></li>`;
       const per={calories:Math.round(t.calories/sv),protein:Math.round(t.protein/sv),carbs:Math.round(t.carbs/sv),fat:Math.round(t.fat/sv)};
       const n=r.nutrition||{}, differs=["calories","protein","carbs","fat"].some(k=>n[k]!==per[k]), stale=b.sig&&b.sig!==ingSig(r);
       body=`${stale?'<div class="notice warn">The ingredients changed since this was worked out. Tap Redo to update it.</div>':""}
         <div class="src">Raw ingredients, whole recipe (AI estimate).</div>
-        <ul class="bd">${b.items.map(x=>row(x.line,x)).join("")}${row("Whole recipe (raw)",Object.assign({grams:b.rawWeight},t),"tot")}</ul>
+        <ul class="bd">${b.items.map(x=>row(x.line,x)).join("")}${row("Whole recipe",t,"tot")}</ul>
         ${differs?`<button type="button" class="btn" id="bdUse">Use these for the per-serving macros (${per.calories} cal)</button>`:""}`;
     }
   }else{
