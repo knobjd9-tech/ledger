@@ -106,6 +106,9 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .bd li.tot .bl{font-weight:700}
 .weigh{display:flex;gap:8px;align-items:center;flex-wrap:nowrap}
 .weigh .field{width:120px;flex:none}
+.calc{display:grid;gap:6px;background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.calcout{font-size:15px;color:var(--muted)}
+.calcout b{color:var(--accent);font-family:var(--display);font-weight:800;font-size:20px}
 .macro.cal .v{color:var(--accent)}
 .stepper{display:flex;align-items:center;gap:6px}
 .stepper button{width:34px;height:34px;border-radius:99px;background:var(--raised);border:1px solid var(--line);font-size:18px;line-height:1}
@@ -1227,32 +1230,53 @@ async function updateFromCaption(r){
 const dishWeight=r=>r.weighed||((r.breakdown||{}).cookedWeight)||null;
 const ingSig=r=>(r.ingredients||[]).join("|");
 function servingLine(r){
-  const w=dishWeight(r), sv=r.servings||1, n=r.nutrition||{};
-  if(!w) return `<div class="servw"><span>Serving size: tap <b style="font-family:inherit;font-weight:600;color:var(--accent)">Macro breakdown</b> below, or weigh the finished dish.</span></div>`;
-  const per=Math.round(w/sv), totCal=n.calories!=null?n.calories*sv:(r.breakdown?r.breakdown.total.calories:null);
-  const per100=totCal!=null?Math.round(totCal/w*100):null;
-  return `<div class="servw"><span>1 serving ≈ <b>${per} g</b> cooked${r.weighed?"":' <span class="est">est.</span>'}</span>${per100!=null?`<span><b>${per100}</b> cal per 100 g</span>`:""}<span>Whole dish ${r.weighed?"":"≈ "}${w} g</span></div>`;
+  const w=dishWeight(r); if(!w) return "";
+  return `<div class="servw"><span>1 serving ≈ <b>${Math.round(w/(r.servings||1))} g</b> cooked${r.weighed?"":' <span class="est">est.</span>'}</span></div>`;
 }
+let bdTab=(()=>{try{return localStorage.getItem("recipes.v1.bdTab")||"ing"}catch(e){return "ing"}})();
+// whole-dish macros: your saved per-serving numbers × servings, else the AI breakdown total
+function dishTotals(r){const n=r.nutrition||{}, sv=r.servings||1;
+  if(n.calories!=null) return {calories:n.calories*sv,protein:(n.protein||0)*sv,carbs:(n.carbs||0)*sv,fat:(n.fat||0)*sv};
+  return r.breakdown?r.breakdown.total:null}
 function breakdownPanel(r){
-  const b=r.breakdown;
-  if(!b) return `<div class="panel"><div class="sectionhead"><h3>Macro breakdown</h3></div><div class="src">See calories, protein, carbs and fat for each ingredient, plus the cooked weight of the dish so you know what 1 serving weighs.</div><button type="button" class="btn primary" id="bdRun" ${(r.ingredients||[]).length?"":"disabled"}>Macro breakdown</button></div>`;
-  const sv=r.servings||1, t=b.total, f=x=>x==null?"–":x;
-  const row=(l,x,cls)=>`<li class="${cls||""}"><span class="bl">${esc(l)}</span><span class="bn">${x.grams!=null?`${x.grams} g · `:""}<b>${f(x.calories)}</b> cal · ${f(x.protein)}g P · ${f(x.carbs)}g C · ${f(x.fat)}g F</span></li>`;
-  const per={calories:Math.round(t.calories/sv),protein:Math.round(t.protein/sv),carbs:Math.round(t.carbs/sv),fat:Math.round(t.fat/sv)};
-  const n=r.nutrition||{}, differs=["calories","protein","carbs","fat"].some(k=>n[k]!==per[k]);
-  const stale=b.sig&&b.sig!==ingSig(r);
-  return `<div class="panel"><div class="sectionhead"><h3>Macro breakdown</h3><button type="button" class="linkedit" id="bdRun">Redo</button></div>
-    ${stale?'<div class="notice warn">The ingredients changed since this was worked out. Tap Redo to update it.</div>':""}
-    <div class="src">Raw ingredients, whole recipe (AI estimate).</div>
-    <ul class="bd">${b.items.map(x=>row(x.line,x)).join("")}${row("Whole recipe",Object.assign({grams:b.rawWeight},t),"tot")}${row(`Per serving (÷ ${sv})`,Object.assign({grams:null},per),"tot")}</ul>
-    ${differs?`<button type="button" class="btn" id="bdUse">Use these for the per-serving macros</button>`:""}
-    <div style="display:grid;gap:6px;border-top:1px solid var(--line);padding-top:10px">
-      <div><b>Cooked weight</b> <span class="src">${r.weighed?`You weighed it: ${r.weighed} g.`:b.cookedWeight?`About ${b.cookedWeight} g (est.). ${esc(b.cookedNote||"")}`:""}</span></div>
-      <div class="weigh"><input id="bdW" class="field" type="number" inputmode="numeric" min="1" placeholder="grams" value="${r.weighed||""}" aria-label="Finished dish weight in grams"><button type="button" class="btn" id="bdWSave">${r.weighed?"Update":"I weighed it"}</button>${r.weighed?'<button type="button" class="linkedit" id="bdWClear">Use estimate</button>':""}</div>
-      <div class="src">Weigh the whole finished dish (minus the pan) for an exact serving size.</div>
-    </div></div>`;
+  const b=r.breakdown, sv=r.servings||1, f=x=>x==null?"–":x;
+  const tabs=`<div class="parts" role="group" aria-label="Show"><button type="button" data-bd="ing" aria-pressed="${bdTab==="ing"}">Ingredients</button><button type="button" data-bd="cooked" aria-pressed="${bdTab==="cooked"}">Cooked</button></div>`;
+  let body="";
+  if(bdTab==="ing"){
+    if(!b) body=`<div class="src">See calories, protein, carbs and fat for each raw ingredient. Takes about 10 seconds, then it's saved.</div><button type="button" class="btn primary" id="bdRun" ${(r.ingredients||[]).length?"":"disabled"}>Work out the macros</button>`;
+    else{
+      const t=b.total, row=(l,x,cls)=>`<li class="${cls||""}"><span class="bl">${esc(l)}</span><span class="bn">${x.grams!=null?`${x.grams} g · `:""}<b>${f(x.calories)}</b> cal · ${f(x.protein)}g P · ${f(x.carbs)}g C · ${f(x.fat)}g F</span></li>`;
+      const per={calories:Math.round(t.calories/sv),protein:Math.round(t.protein/sv),carbs:Math.round(t.carbs/sv),fat:Math.round(t.fat/sv)};
+      const n=r.nutrition||{}, differs=["calories","protein","carbs","fat"].some(k=>n[k]!==per[k]), stale=b.sig&&b.sig!==ingSig(r);
+      body=`${stale?'<div class="notice warn">The ingredients changed since this was worked out. Tap Redo to update it.</div>':""}
+        <div class="src">Raw ingredients, whole recipe (AI estimate).</div>
+        <ul class="bd">${b.items.map(x=>row(x.line,x)).join("")}${row("Whole recipe (raw)",Object.assign({grams:b.rawWeight},t),"tot")}</ul>
+        ${differs?`<button type="button" class="btn" id="bdUse">Use these for the per-serving macros (${per.calories} cal)</button>`:""}`;
+    }
+  }else{
+    const w=dishWeight(r), t=dishTotals(r);
+    if(!w) body=`<div class="src">Weigh the whole finished dish (minus the pan), or tap Ingredients → Work out the macros for an estimate.</div>`;
+    else if(!t) body=`<div class="src">Add the macros first (Edit, or Ingredients → Work out the macros).</div>`;
+    else{
+      const k=x=>Math.round(x/w*100), per=Math.round(w/sv);
+      body=`<div class="macros">${[["Cal",k(t.calories),""],["Protein",k(t.protein),"g"],["Carbs",k(t.carbs),"g"],["Fat",k(t.fat),"g"]].map(([l,v,u],i)=>`<div class="macro ${i?"":"cal"}"><span class="lbl">${l}</span><span class="v num">${v}${u}</span></div>`).join("")}</div>
+        <div class="src" style="margin-top:-4px">Per 100 g of the cooked dish. Whole dish ${r.weighed?"":"≈ "}${w} g · 1 serving ≈ ${per} g${r.weighed?"":" (est.)"}.</div>
+        <div class="calc"><label for="bdG" class="lbl">How much are you eating?</label>
+          <div class="weigh"><input id="bdG" class="field" type="number" inputmode="decimal" min="0" value="${per}" aria-label="Grams"><span>g</span></div>
+          <div class="calcout num" id="bdOut"></div></div>`;
+    }
+    body+=`<div style="display:grid;gap:6px;border-top:1px solid var(--line);padding-top:10px">
+      <div><b>Cooked weight</b> <span class="src">${r.weighed?`You weighed it: ${r.weighed} g.`:b&&b.cookedWeight?`About ${b.cookedWeight} g (est.). ${esc(b.cookedNote||"")}`:"Not weighed yet."}</span></div>
+      <div class="weigh"><input id="bdW" class="field" type="number" inputmode="numeric" min="1" placeholder="grams" value="${r.weighed||""}" aria-label="Finished dish weight in grams"><button type="button" class="btn" id="bdWSave">${r.weighed?"Update":"I weighed it"}</button>${r.weighed&&b&&b.cookedWeight?'<button type="button" class="linkedit" id="bdWClear">Use estimate</button>':""}</div></div>`;
+  }
+  return `<div class="panel" id="bdPanel"><div class="sectionhead"><h3>Macros</h3>${b&&bdTab==="ing"?'<button type="button" class="linkedit" id="bdRun">Redo</button>':""}</div>${tabs}${body}</div>`;
 }
 function wireBreakdown(r){
+  document.querySelectorAll("[data-bd]").forEach(x=>x.onclick=()=>{bdTab=x.dataset.bd;try{localStorage.setItem("recipes.v1.bdTab",bdTab)}catch(e){}
+    const y=$("bdPanel").getBoundingClientRect().top; renderDetail(); const p=$("bdPanel"); $("detail").scrollTop+=p.getBoundingClientRect().top-y});
+  const g=$("bdG"); if(g){const calc=()=>{const w=dishWeight(r), t=dishTotals(r), q=Number(g.value)||0, k=x=>Math.round(x*q/w);
+      $("bdOut").innerHTML=q?`<b>${k(t.calories)}</b> cal · <b>${k(t.protein)}</b>g protein · ${k(t.carbs)}g carbs · ${k(t.fat)}g fat`:"Enter grams";};
+    g.oninput=calc; calc()}
   const run=$("bdRun"); if(run) run.onclick=async()=>{
     try{await withBusy("AI is working out the macros…",async ctl=>{
       $("busySub").textContent="Usually 5 to 20 seconds."; $("busySub").dataset.fixed="1";
