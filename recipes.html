@@ -160,8 +160,11 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .ggroup h3{font-size:15px;margin-bottom:4px}
 .gitem{display:flex;gap:10px;align-items:flex-start;padding:8px 4px;border-bottom:1px solid var(--line)}
 .gitem input{width:20px;height:20px;accent-color:var(--accent);flex:none;margin-top:1px}
-.gitem span{flex:1}
-.gitem input:checked+span{color:var(--muted);text-decoration:line-through}
+.gitem .gname{flex:1;min-width:0;display:grid;gap:1px}
+.gitem .gname small{font-size:12px;color:var(--muted)}
+.gitem .gq{flex:none;color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums;padding-top:1px}
+.ggroup h3{font-size:12px!important;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+.gitem input:checked~span{color:var(--muted);text-decoration:line-through}
 .gitem button{background:none;border:0;color:var(--muted);font-size:18px;line-height:1;padding:0 4px}
 
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;font-weight:500;max-width:calc(100vw - 32px);box-shadow:0 10px 30px rgba(0,0,0,.5)}
@@ -316,7 +319,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
       <div class="row"><input id="gAdd" class="field" type="text" placeholder="e.g. paper towels" autocomplete="off"><button class="btn primary" type="submit">Add</button></div>
     </form>
     <div class="panel">
-      <div class="sectionhead"><h2 style="font-size:18px">Grocery list</h2><span class="src num" id="gCount"></span></div>
+      <div class="sectionhead"><h2 style="font-size:18px">Grocery list</h2><div class="row" style="flex-wrap:nowrap;gap:10px"><span class="src num" id="gCount"></span><button type="button" class="btn primary" id="gShare" style="padding:7px 14px">Share</button></div></div>
       <div class="glist" id="glist"></div>
       <div class="row" id="gTools">
         <button type="button" class="btn" id="gClearDone">Clear checked</button>
@@ -1546,8 +1549,8 @@ function renderDetail(){
   };
   $("aGroc").onclick=()=>{
     const f2=servings/(r.servings||1);
-    realIngs(r).forEach(l=>{const s=lineFor(l,f2);grocery.push({id:Math.random().toString(36).slice(2,9),text:(s.q?s.q+" ":"")+(s.alt?"("+s.alt+") ":"")+s.rest.trim(),recipe:r.title,done:false})});
-    saveGrocery(); toast(`Added ${realIngs(r).length} items to your grocery list.`);
+    const res=addToGrocery(realIngs(r),f2,r.title);
+    saveGrocery(); toast(`Added ${res.added} item${res.added===1?"":"s"} to your grocery list${res.merged?`, combined ${res.merged} with what was there`:""}${res.skipped.length?` (skipped ${res.skipped.join(", ")})`:""}.`);
   };
   $("aPdf").onclick=()=>printRecipe(r);
   $("aShare").onclick=()=>shareRecipe(r);
@@ -1643,18 +1646,94 @@ $("cIngBtn").onclick=()=>{const d=$("cDrawer");d.hidden=!d.hidden;$("cIngBtn").s
 /* ---------- grocery ---------- */
 let gTimer;
 function saveGrocery(){cache();renderGrocery();clearTimeout(gTimer);gTimer=setTimeout(()=>enqueue({action:"saveGrocery",items:grocery}),700)}
+/* Turns "2 large eggs, beaten" into "Eggs · 2", drops water, leaves amounts off spices, salt and oils,
+   combines repeats and sorts everything by store section. */
+const G_UNITS=[["lb",/^(lbs?|pounds?)\b\.?/i],["oz",/^(oz|ounces?)\b\.?/i],["cup",/^(cups?|c)\b\.?/i],["tbsp",/^(tbsps?|tablespoons?|T)\b\.?/],["tbsp",/^(tbsps?|tablespoons?)\b\.?/i],["tsp",/^(tsps?|teaspoons?|t)\b\.?/],["tsp",/^(tsps?|teaspoons?)\b\.?/i],
+  ["g",/^(g|grams?)\b\.?/i],["kg",/^(kg|kilograms?)\b\.?/i],["ml",/^(ml|milliliters?)\b\.?/i],["l",/^(l|liters?|litres?)\b\.?/i],["can",/^(cans?)\b/i],["package",/^(packages?|pkgs?|packs?)\b\.?/i],
+  ["clove",/^(cloves?)\b/i],["bunch",/^(bunch(es)?)\b/i],["head",/^(heads?)\b/i],["sprig",/^(sprigs?)\b/i],["slice",/^(slices?)\b/i],["stick",/^(sticks?)\b/i],["jar",/^(jars?)\b/i],["bottle",/^(bottles?)\b/i],["bag",/^(bags?)\b/i],["pinch",/^(pinch(es)?)\b/i],["dash",/^(dash(es)?)\b/i]];
+const G_PLURAL={cup:"cups",can:"cans",package:"packages",clove:"cloves",bunch:"bunches",head:"heads",sprig:"sprigs",slice:"slices",stick:"sticks",jar:"jars",bottle:"bottles",bag:"bags"};
+const G_SKIP=/^(?:cold |warm |hot |boiling |ice[- ]cold |lukewarm |filtered |tap )?water$|^ice( cubes)?$/i;
+const G_PREP=/\b(squeezed|fresh-squeezed|minced|chopped|diced|sliced|thinly|finely|roughly|coarsely|grated|shredded|beaten|lightly|whisked|melted|softened|cubed|crushed|peeled|seeded|halved|quartered|trimmed|rinsed|drained|patted dry|julienned|zested|juiced|packed|sifted|cooked|uncooked|room temperature|at room temperature|cold|divided|optional|freshly|plus more|or more|to taste|for garnish|for serving|for frying|as needed)\b/gi;
+const G_CATS=[
+ ["Spices & oils",/\b(salt|black pepper|white pepper|peppercorns|pepper flakes|cayenne|paprika|cumin|coriander|turmeric|cinnamon|nutmeg|cloves ground|allspice|chili powder|garlic powder|onion powder|curry powder|garam masala|italian seasoning|seasoning|oregano|dried|bay leaves?|red pepper flakes|chili flakes|za.atar|sumac|old bay|everything bagel|oil|cooking spray|vinegar|extract|baking soda|baking powder|cornstarch|yeast|msg)\b/i],
+ ["Produce",/\b(lettuce|arugula|spinach|kale|greens|tomato(es)?|onions?|shallots?|garlic|ginger|lemons?|limes?|oranges?|apples?|bananas?|berries|strawberries|blueberries|avocados?|potato(es)?|carrots?|celery|cucumbers?|zucchini|squash|bell peppers?|jalape.os?|poblano|serrano|broccoli(ni)?|cauliflower|mushrooms?|parsley|cilantro|basil|mint|dill|rosemary|thyme|chives|scallions?|green onions?|leeks?|cabbage|corn|peas|asparagus|green beans|eggplant|radish(es)?|beets?|fennel|herbs?|sprouts|grapes|mango|pineapple|peach(es)?|pears?|melon|watermelon|salad mix|slaw)\b/i],
+ ["Meat & seafood",/\b(chicken|beef|steak|pork|bacon|sausage|turkey|lamb|veal|salmon|shrimp|fish|cod|tuna|halibut|tilapia|scallops?|crab|lobster|mussels|clams|prosciutto|pancetta|ham|chorizo|salami|pepperoni|meatballs?|ground)\b/i],
+ ["Dairy & eggs",/\b(milk|butter|cream|cheese|parmesan|parmigiano|pecorino|mozzarella|cheddar|feta|goat cheese|ricotta|burrata|yogurt|eggs?|sour cream|half[- ]and[- ]half|cr.me fra.che|mascarpone)\b/i],
+ ["Bakery",/\b(bread|tortillas?|buns?|rolls?|pita|naan|baguette|ciabatta|sourdough|english muffins?|bagels?|croissants?|wraps?)\b/i],
+ ["Frozen",/\bfrozen\b/i],
+ ["Pantry",/./]];
+const G_ORDER=["Produce","Meat & seafood","Dairy & eggs","Bakery","Pantry","Spices & oils","Frozen","Other"];
+function gCat(name){const n=name.toLowerCase();
+  if(/\b(bell|jalape|poblano|serrano|red|green|yellow|orange)\s+peppers?\b/.test(n)&&!/flakes/.test(n)) return "Produce";
+  if(/\bfresh\b/.test(n)&&/\b(parsley|cilantro|basil|mint|dill|rosemary|thyme|oregano|herbs?|chives)\b/.test(n)) return "Produce";
+  if(/\b(peanut|almond|coconut|sesame) butter\b/.test(n)) return "Pantry";
+  if(/\b(broth|stock|sauce|paste|canned|beans|chickpeas|lentils|rice|pasta|penne|orzo|spaghetti|linguine|rigatoni|noodles|flour|sugar|honey|maple|oats|panko|breadcrumbs|nuts|almonds|walnuts|pecans|seeds|chocolate|cocoa|mayonnaise|mustard|ketchup|salsa|olives|capers|pickles|jam|syrup|wine|pernod|vodka)\b/.test(n)&&!/\b(chicken|beef|pork|salmon|shrimp)\b(?! (broth|stock))/.test(n)) return /oil\b|vinegar|extract/.test(n)?"Spices & oils":"Pantry";
+  for(const [c,re] of G_CATS) if(re.test(n)) return c;
+  return "Other"}
+const gNoAmt=(name,cat)=>cat==="Spices & oils"||/^(salt|pepper|salt and pepper)$/i.test(name);
+function parseGroc(line,f){
+  let t=amountFirst(String(line)).replace(/\([^)]*\)/g," ").replace(/\s+/g," ").trim();
+  let n=null, unit="";
+  const m=t.match(NUMRE); if(m){n=toNum(m[0]); t=t.slice(m[0].length).trim();
+    const rg=t.match(/^(?:-|–|to)\s*(\d+(?:\.\d+)?|\d+\/\d+)\s*/); if(rg){n=Math.max(n,toNum(rg[1]));t=t.slice(rg[0].length)}}
+  if(n!=null){for(const [u,re] of G_UNITS){const x=t.match(re);if(x){unit=u;t=t.slice(x[0].length).trim();break}}}
+  t=t.replace(/^of\s+/i,"");
+  let name=t.split(/,| - | – /)[0]
+    .replace(G_PREP," ").replace(/\b(large|medium|small|extra[- ]large|jumbo|boneless|skinless|good|high[- ]quality|store[- ]bought|homemade)\b/gi," ")
+    .replace(/\b(and|or)\s*$/i,"").replace(/^\s*(and|or)\b/i,"").replace(/\s+/g," ").trim();
+  if(/^(garlic )?cloves?( garlic)?$|^garlic cloves?$/i.test(name)){name="garlic";if(!unit)unit="clove"}
+  if(/^(lemon|lime|orange) (juice|zest)$/i.test(name)){name=name.split(" ")[0];n=null}                     // you buy the fruit
+  if(/^(salt and (black )?pepper|salt & pepper)$/i.test(name)) return [{name:"Salt",cat:"Spices & oils",qty:null},{name:"Black pepper",cat:"Spices & oils",qty:null}];
+  if(/^(kosher |sea |table |fine |coarse )?salt$/i.test(name)) name="salt";
+  if(/^(ground |cracked |coarsely ground )?(black )?pepper$/i.test(name)) name="black pepper";
+  if(!/\b(parsley|cilantro|basil|mint|dill|rosemary|thyme|oregano|herbs?|chives|tarragon|sage)\b/i.test(name)) name=name.replace(/^fresh\s+/i,"");
+  if(!name) return null;
+  name=name.charAt(0).toUpperCase()+name.slice(1);
+  if(G_SKIP.test(name)) return {skip:name.toLowerCase()};
+  const cat=gCat(name);
+  if(gNoAmt(name,cat)) return {name,cat,qty:null};
+  if(cat==="Produce"&&/\b(parsley|cilantro|basil|mint|dill|rosemary|thyme|oregano|herbs?|chives|tarragon|sage)\b/i.test(name)&&/^(tsp|tbsp|cup)$/.test(unit)) return {name,cat,qty:null};   // you buy a bunch
+  return {name,cat,qty:n!=null?{n:n*(f||1),unit}:null};
+}
+const gKey=name=>name.toLowerCase().replace(/[^a-z ]/g,"").replace(/(es|s)\b/g,"").replace(/\s+/g," ").trim();
+const gQty=q=>{if(!q)return "";const n=q.n,u=q.unit,v=fmt(Math.round(n*100)/100);return u?`${v} ${n>1&&G_PLURAL[u]?G_PLURAL[u]:u}`:v};
+function addToGrocery(lines,f,title){
+  const out={added:0,merged:0,skipped:[]};
+  lines.flatMap(l=>[].concat(parseGroc(l,f)||[])).forEach(g=>{ if(g.skip){out.skipped.includes(g.skip)||out.skipped.push(g.skip);return}
+    const k=gKey(g.name), ex=grocery.find(x=>!x.done&&x.name&&gKey(x.name)===k);
+    if(ex){ if(title&&!(ex.recipes||[]).includes(title)) ex.recipes=(ex.recipes||[]).concat([title]);
+      if(g.qty){ex.qtys=ex.qtys||[]; const same=ex.qtys.find(q=>q.unit===g.qty.unit); if(same) same.n+=g.qty.n; else ex.qtys.push(g.qty)}
+      out.merged++; return}
+    grocery.push({id:Math.random().toString(36).slice(2,9),name:g.name,cat:g.cat,qtys:g.qty?[g.qty]:[],recipes:title?[title]:[],done:false}); out.added++});
+  return out;
+}
+// lists saved before this change: tidy them into the new format once
+function migrateGrocery(){let ch=false;
+  grocery=grocery.flatMap(x=>{if(x.name)return [x]; ch=true;
+    const t=String(x.text||""), m=t.match(/^[\d.]+\s*(?:g|ml)\s*\(([^)]+)\)\s*(.+)$/), g=[].concat(parseGroc(m?m[1]+" "+m[2]:t,1)||[])[0];
+    if(!g||g.skip) return [];
+    return [{id:x.id,name:g.name,cat:x.recipe==="Other"&&!g.qty?gCat(g.name):g.cat,qtys:g.qty?[g.qty]:[],recipes:x.recipe&&x.recipe!=="Other"?[x.recipe]:[],done:!!x.done}]});
+  return ch}
 function renderGrocery(){
+  if(migrateGrocery()) {cache(); clearTimeout(gTimer); gTimer=setTimeout(()=>enqueue({action:"saveGrocery",items:grocery}),700)}
   const left=grocery.filter(g=>!g.done).length;
   $("gCount").textContent=grocery.length?`${left} left`:"";
   $("menuGroc").textContent=left?`${left} item${left===1?"":"s"} to buy`:"Ingredients for the store";
-  $("gTools").hidden=!grocery.length;
+  $("gTools").hidden=!grocery.length; $("gShare").hidden=!left;
   if(!grocery.length){$("glist").innerHTML='<div class="empty"><b>Your list is empty</b><span>Open a recipe and tap “Add to grocery list”, or add items above.</span></div>';return}
-  const groups={}; grocery.forEach(g=>{(groups[g.recipe||"Other"]=groups[g.recipe||"Other"]||[]).push(g)});
-  $("glist").innerHTML=Object.entries(groups).map(([name,items])=>`<div class="ggroup"><h3>${esc(name)}</h3>${items.map(g=>`<label class="gitem"><input type="checkbox" data-id="${g.id}" ${g.done?"checked":""}><span>${esc(g.text)}</span><button type="button" data-del="${g.id}" aria-label="Remove ${esc(g.text)}">×</button></label>`).join("")}</div>`).join("");
+  const groups={}; grocery.forEach(g=>{const c=G_ORDER.includes(g.cat)?g.cat:"Other";(groups[c]=groups[c]||[]).push(g)});
+  $("glist").innerHTML=G_ORDER.filter(c=>groups[c]).map(c=>`<div class="ggroup"><h3>${esc(c)}</h3>${groups[c].sort((a,b)=>a.done-b.done||a.name.localeCompare(b.name)).map(g=>`<label class="gitem"><input type="checkbox" data-id="${g.id}" ${g.done?"checked":""}><span class="gname">${esc(g.name)}${(g.recipes||[]).length?`<small>${esc(g.recipes.join(", "))}</small>`:""}</span><span class="gq">${esc((g.qtys||[]).map(gQty).join(" + "))}</span><button type="button" data-del="${g.id}" aria-label="Remove ${esc(g.name)}">×</button></label>`).join("")}</div>`).join("");
 }
+function groceryText(){
+  const groups={}; grocery.filter(g=>!g.done).forEach(g=>{const c=G_ORDER.includes(g.cat)?g.cat:"Other";(groups[c]=groups[c]||[]).push(g)});
+  return "Grocery list\n"+G_ORDER.filter(c=>groups[c]).map(c=>"\n"+c.toUpperCase()+"\n"+groups[c].sort((a,b)=>a.name.localeCompare(b.name)).map(g=>{const q=(g.qtys||[]).map(gQty).join(" + ");return "• "+g.name+(q?` (${q})`:"")}).join("\n")).join("\n");
+}
+$("gShare").onclick=async()=>{const text=groceryText();
+  if(navigator.share){try{await navigator.share({text});return}catch(e){if(e&&e.name==="AbortError")return}}
+  try{await navigator.clipboard.writeText(text);toast("List copied. Paste it into a text.")}catch(e){toast("Sharing isn't available here.")}};
 $("glist").addEventListener("change",e=>{const id=e.target.dataset.id;const g=grocery.find(x=>x.id===id);if(g){g.done=e.target.checked;saveGrocery()}});
 $("glist").addEventListener("click",e=>{const id=e.target.dataset&&e.target.dataset.del;if(id){e.preventDefault();grocery=grocery.filter(x=>x.id!==id);saveGrocery()}});
-$("gAddForm").addEventListener("submit",e=>{e.preventDefault();const t=$("gAdd").value.trim();if(!t)return;grocery.push({id:Math.random().toString(36).slice(2,9),text:t,recipe:"Other",done:false});$("gAdd").value="";saveGrocery()});
+$("gAddForm").addEventListener("submit",e=>{e.preventDefault();const t=$("gAdd").value.trim();if(!t)return;const g=[].concat(parseGroc(t,1)||[])[0]||{name:t,cat:"Other",qty:null}; const nm=g.name||t; grocery.push({id:Math.random().toString(36).slice(2,9),name:nm,cat:gCat(nm),qtys:g.qty?[g.qty]:[],recipes:[],done:false});$("gAdd").value="";saveGrocery()});
 $("gClearDone").onclick=()=>{grocery=grocery.filter(g=>!g.done);saveGrocery()};
 $("gClearAll").onclick=()=>{$("gConfirm").hidden=false};
 $("gClearNo").onclick=()=>{$("gConfirm").hidden=true};
