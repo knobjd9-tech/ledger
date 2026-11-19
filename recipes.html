@@ -1304,9 +1304,12 @@ function cookedView(r){
   const cube=(v,l,c)=>`<span class="cube ${c||""}"><b>${v}</b><i>${l}</i></span>`;
   const blocks=parts.map((p,i)=>{const k=x=>r1(x/p.weight*perBase());
     return `<div class="calc">
-      <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:nowrap;gap:8px"><b>${multi?esc(p.name):"How much are you eating?"}</b><span class="cubes">${cube(k(p.total.calories),"cal","cal")}${cube(k(p.total.protein)+"g","protein")}</span></div>
-      <div class="src" style="margin-top:-2px">${perLbl()} · ${k(p.total.carbs)}g carbs · ${k(p.total.fat)}g fat · ${multi?"cooked "+p.name.toLowerCase()+" ":"whole dish "}${p.weighed?"":"≈ "}${wtxt(p.weight)}</div>
-      <div class="weigh"><input class="field" type="number" inputmode="decimal" min="0" step="any" data-amt="${i}" value="${fromG(p.weight/sv)}" aria-label="${esc(p.name)} amount in ${wUnit}"><span>${wUnit}</span>${multi?`<span class="src" data-pout="${i}"></span>`:""}</div>
+      <b>${multi?esc(p.name):"How much are you eating?"}</b>
+      <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:nowrap;gap:8px">
+        <div class="weigh"><input class="field" type="number" inputmode="decimal" min="0" step="any" data-amt="${i}" value="${fromG(p.weight/sv)}" aria-label="${esc(p.name)} amount in ${wUnit}"><span>${wUnit}</span></div>
+        <span class="cubes"><span class="cube cal"><b data-cc="${i}">–</b><i>cal</i></span><span class="cube"><b data-cp="${i}">–</b><i>protein</i></span></span></div>
+      <div class="src" data-pout="${i}"></div>
+      <div class="src">${perLbl()}: ${k(p.total.calories)} cal · ${k(p.total.protein)}g protein · ${multi?"cooked "+p.name.toLowerCase()+" ":"whole dish "}${p.weighed?"":"≈ "}${wtxt(p.weight)}</div>
     </div>`}).join("");
   const note=r.breakdown&&!r.breakdown.components&&(r.ingredients||[]).length>3?'<div class="src">Tip: tap Ingredients → Redo to split this into parts (like chicken and pasta) so you can enter each one.</div>':"";
   return `${unitSw}${note}${blocks}
@@ -1357,8 +1360,11 @@ function wireBreakdown(r){
     const calc=()=>{const t={calories:0,protein:0,carbs:0,fat:0}; let any=false;
       ins.forEach(el=>{const p=parts[el.dataset.amt], q=toG(el.value||0); if(q>0)any=true;
         const add={}; ["calories","protein","carbs","fat"].forEach(k=>{add[k]=p.total[k]*q/p.weight;t[k]+=add[k]});
-        const o=document.querySelector(`[data-pout="${el.dataset.amt}"]`); if(o) o.textContent=q?`${Math.round(add.calories)} cal · ${Math.round(add.protein)}g protein`:"";});
-      $("bdOut").innerHTML=any?`${multi?'<span class="lbl" style="display:block;margin-bottom:2px">Your plate</span>':""}<b>${Math.round(t.calories)}</b> cal · <b>${Math.round(t.protein)}</b>g protein · ${Math.round(t.carbs)}g carbs · ${Math.round(t.fat)}g fat`:"Enter an amount";};
+        const i=el.dataset.amt, set=(sel,v)=>{const o=document.querySelector(sel);if(o)o.textContent=v};
+        set(`[data-cc="${i}"]`,q?Math.round(add.calories):"–"); set(`[data-cp="${i}"]`,q?r1(add.protein)+"g":"–");
+        set(`[data-pout="${i}"]`,q?`${Math.round(add.carbs)}g carbs · ${Math.round(add.fat)}g fat`:"");});
+      $("bdOut").hidden=!multi;
+      $("bdOut").innerHTML=multi&&any?`<span class="lbl" style="display:block;margin-bottom:2px">Your plate</span><b>${Math.round(t.calories)}</b> cal · <b>${Math.round(t.protein)}</b>g protein · ${Math.round(t.carbs)}g carbs · ${Math.round(t.fat)}g fat`:"";};
     ins.forEach(el=>el.oninput=calc); calc()}
   const cp=$("bdCopy"); if(cp) cp.onclick=()=>copyLoseIt(r);
   const run=$("bdRun"); if(run) run.onclick=async()=>{
