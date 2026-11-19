@@ -122,6 +122,8 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .stepper{display:flex;align-items:center;gap:6px}
 .stepper button{width:34px;height:34px;border-radius:99px;background:var(--raised);border:1px solid var(--line);font-size:18px;line-height:1}
 .ings{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.ings li.ihead{font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);padding:12px 0 2px}
+.ings li.ihead:first-child{padding-top:2px}
 .ings label{display:flex;gap:10px;align-items:flex-start;padding:7px 4px;border-radius:8px;cursor:pointer}
 .ings input{margin-top:3px;width:18px;height:18px;accent-color:var(--accent);flex:none}
 .ings input:checked+span{color:var(--muted);text-decoration:line-through}
@@ -368,7 +370,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
       <div class="chips" id="eTags" style="flex-wrap:wrap"></div>
       <div class="row" style="margin-top:8px"><input id="eTagNew" class="field" type="text" placeholder="Add your own tag"><button type="button" class="btn" id="eTagAdd">Add tag</button></div>
     </div>
-    <label for="eIng">Ingredients (one per line)<textarea id="eIng" class="field"></textarea></label>
+    <label for="eIng">Ingredients (one per line. For sections, add a title line ending in a colon, like “For the salad:”)<textarea id="eIng" class="field"></textarea></label>
     <label for="eSteps">Steps (one per line)<textarea id="eSteps" class="field" style="min-height:180px"></textarea></label>
     <label for="eLinks">Extra links (one per line; add a name first if you like)<textarea id="eLinks" class="field" style="min-height:70px" placeholder="Sauce recipe https://…&#10;https://…"></textarea></label>
     <label for="eNotes">Notes<textarea id="eNotes" class="field" style="min-height:70px" placeholder="Swaps, tips, what to change next time"></textarea></label>
@@ -669,6 +671,9 @@ function amountFirst(l){
   const amt=m[2].trim(); if(!(UNIT_CI.test(amt.replace(NUMRE,"").trim()+" ")||UNIT_T.test(amt.replace(NUMRE,"")+" ")||/^\S+$/.test(amt))) return l;
   return amt+" "+m[1].trim();
 }
+const isHead=l=>{l=String(l||"").trim();return /^#/.test(l)||(/:$/.test(l)&&l.length<=50)};   // section title line, e.g. "For the salad:"
+const headTxt=l=>String(l).trim().replace(/^#+\s*/,"").replace(/:$/,"");
+const realIngs=r=>(r.ingredients||[]).filter(l=>!isHead(l));
 const lineFor=(l,f)=>metricLine(amountFirst(l),f);   // grams first, original amount alongside when they differ
 const stepFor=t=>t;   // temperatures stay in °F
 
@@ -1190,7 +1195,7 @@ function printRecipe(r){
     <p class="pmeta">${[servings+" serving"+(servings===1?"":"s"),r.time?fmtTime(r.time):"",(r.tags||[]).join(" · ")].filter(Boolean).join("  ·  ")}</p>
     ${r.image?`<img src="${esc(r.image)}" alt="" referrerpolicy="no-referrer">`:""}
     ${macro?`<p class="pmac">Per serving${r.nutritionEstimated?" (estimated)":""}: ${macro}</p>`:""}
-    <h2>Ingredients</h2><ul>${(r.ingredients||[]).map(l=>{const s=lineFor(l,f);return `<li>${s.q?`<b>${esc(s.q)}</b> `:""}${s.alt?`(${esc(s.alt)}) `:""}${esc(s.rest.trim())}</li>`}).join("")}</ul>
+    <h2>Ingredients</h2><ul>${(r.ingredients||[]).map(l=>{if(isHead(l))return `<li style="list-style:none;margin:10px 0 2px -18px;font-weight:700">${esc(headTxt(l))}</li>`;const s=lineFor(l,f);return `<li>${s.q?`<b>${esc(s.q)}</b> `:""}${s.alt?`(${esc(s.alt)}) `:""}${esc(s.rest.trim())}</li>`}).join("")}</ul>
     <h2>Steps</h2><ol>${(r.steps||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ol>
     ${r.notes?`<h2>Notes</h2><p>${esc(r.notes)}</p>`:""}
     ${links.length?`<h2>Links</h2><ul class="plinks">${links.map(([l,u])=>`<li>${esc(l)}: ${esc(u)}</li>`).join("")}</ul>`:""}`;
@@ -1271,7 +1276,7 @@ async function updateFromCaption(r){
 /* ---------- serving weight + macro breakdown ---------- */
 // cooked weight of the whole dish: what you weighed, else the AI estimate
 const dishWeight=r=>r.weighed||((r.breakdown||{}).cookedWeight)||null;
-const ingSig=r=>(r.ingredients||[]).join("|");
+const ingSig=r=>realIngs(r).slice().sort().join("|");   // ignores section titles and order
 function servingLine(r){
   const w=dishWeight(r); if(!w) return "";
   return `<div class="servw"><span>1 serving ≈ <b>${Math.round(w/(r.servings||1))} g</b> cooked${r.weighed?"":' <span class="est">est.</span>'}</span></div>`;
@@ -1370,7 +1375,7 @@ function wireBreakdown(r){
   const run=$("bdRun"); if(run) run.onclick=async()=>{
     try{await withBusy("AI is working out the macros…",async ctl=>{
       $("busySub").textContent="Usually 5 to 20 seconds."; $("busySub").dataset.fixed="1";
-      const j=await post_({action:"macros",title:r.title,servings:r.servings,ingredients:r.ingredients,steps:r.steps},ctl.signal);
+      const j=await post_({action:"macros",title:r.title,servings:r.servings,ingredients:realIngs(r),steps:r.steps},ctl.signal);
       if(j.error==="bad_request") throw new Error("Update your Apps Script first to turn this on.");
       if(j.error) throw new Error(j.message||"Couldn't work out the macros.");
       r.breakdown=Object.assign(j.breakdown,{sig:ingSig(r)}); cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail();
@@ -1422,7 +1427,7 @@ async function sendToLoseIt(r){
   try{
     await withBusy("Making the Lose It page…",async ctl=>{
       $("busySub").dataset.fixed="1"; $("busySub").textContent="Saving it to your site…";
-      const j=await post_({action:"publishRecipe",recipe:{id:r.id,title:r.title,servings:r.servings,time:r.time,ingredients:r.ingredients,steps:r.steps,nutrition:r.nutrition}},ctl.signal);
+      const j=await post_({action:"publishRecipe",recipe:{id:r.id,title:r.title,servings:r.servings,time:r.time,ingredients:realIngs(r),steps:r.steps,nutrition:r.nutrition}},ctl.signal);
       if(j.error==="bad_request"||(!j.error&&!j.url)) throw new Error("Update your Apps Script first.");
       if(j.error) throw new Error(j.message||"Couldn't make the page.");
       url=j.url;
@@ -1447,6 +1452,22 @@ async function sendToLoseIt(r){
   $("liClose").onclick=()=>{$("liDlg").hidden=true};
 }
 
+/* ---------- ingredient sections ("For the chicken:", "For the salad:") ---------- */
+async function splitSections(r){
+  try{await withBusy("AI is sorting the ingredients…",async ctl=>{
+    $("busySub").dataset.fixed="1"; $("busySub").textContent="Usually 5 to 15 seconds.";
+    const ings=realIngs(r), j=await post_({action:"sections",title:r.title,ingredients:ings,steps:r.steps},ctl.signal);
+    if(j.error==="bad_request"||(!j.error&&!j.sections)) throw new Error("Update your Apps Script first to turn this on.");
+    if(j.error) throw new Error(j.message||"Couldn't sort the ingredients.");
+    if(j.sections.length<2){r.noSections=true;cache();enqueue({action:"saveRecipe",recipe:r});renderDetail();toast("This one is a single part, so no sections needed.");return}
+    const used=new Set(), out=[];
+    j.sections.forEach(sec=>{const items=sec.items.filter(i=>!used.has(i)); if(!items.length)return; out.push(sec.name.replace(/^./,c=>c.toUpperCase())+":"); items.forEach(i=>{used.add(i);out.push(ings[i])})});
+    ings.forEach((l,i)=>{if(!used.has(i))out.push(l)});   // anything the AI skipped stays at the end
+    r.ingredients=out; cache(); enqueue({action:"saveRecipe",recipe:r}); renderDetail();
+    toast(`Split into ${j.sections.length} sections. Edit to change them.`);
+  })}catch(e){if(e.message!=="cancel")toast(e.message)}
+}
+
 /* ---------- share / text a recipe: photo + ingredients + steps through the phone's share sheet ---------- */
 const shareImgs={};   // recipe id -> File, made ahead so sharing stays one tap (phones only allow sharing right after a tap)
 function dataUrlFile(d,name){const [h,b]=d.split(","),mime=(h.match(/data:([^;]+)/)||[])[1]||"image/jpeg",bin=atob(b),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new File([u],name,{type:mime})}
@@ -1459,7 +1480,7 @@ async function prepShareImage(r){
 }
 function shareText(r){
   const meta=[r.servings?r.servings+" serving"+(r.servings===1?"":"s"):"",r.time?fmtTime(r.time):""].filter(Boolean).join(" · ");
-  const ings=(r.ingredients||[]).map(l=>{const x=lineFor(l,1);return "• "+((x.q?x.q+" ":"")+(x.alt?"("+x.alt+") ":"")+x.rest).replace(/\s+/g," ").trim()});
+  const ings=(r.ingredients||[]).map((l,i)=>{if(isHead(l))return (i?"\n":"")+headTxt(l)+":";const x=lineFor(l,1);return "• "+((x.q?x.q+" ":"")+(x.alt?"("+x.alt+") ":"")+x.rest).replace(/\s+/g," ").trim()});
   const steps=(r.steps||[]).map((t,i)=>(i+1)+". "+stepFor(t));
   const link=r.video&&isVideo(r.video)?r.video:(r.url||"");
   return [r.title||"Recipe",meta,"","INGREDIENTS",...ings,...(steps.length?["","STEPS",...steps]:[]),...(link?["",(r.video?"Video: ":"Recipe: ")+link]:[])].filter((x,i,a)=>!(x===""&&a[i-1]==="")).join("\n").replace(/^\n+/,"");
@@ -1506,7 +1527,8 @@ function renderDetail(){
     <div class="panel">
       <div class="sectionhead"><h3>Ingredients</h3>
         <div class="stepper"><button type="button" id="sMinus" aria-label="Fewer servings">−</button><span class="num" id="sVal" style="min-width:86px;text-align:center">${servings} serving${servings===1?"":"s"}</span><button type="button" id="sPlus" aria-label="More servings">+</button></div></div>
-      ${(r.ingredients||[]).length?`<ul class="ings">${r.ingredients.map((l,i)=>{const s=lineFor(l,f);return `<li><label><input type="checkbox" id="ing${i}"><span>${s.q?`<span class="q">${esc(s.q)}</span>`:""}${s.alt?` <span class="alt">(${esc(s.alt)})</span>`:""}${esc(s.rest)}</span></label></li>`}).join("")}</ul>`:'<div class="src">No ingredients yet. Tap Edit to add them.</div>'}
+      ${(r.ingredients||[]).length?`<ul class="ings">${r.ingredients.map((l,i)=>{if(isHead(l))return `<li class="ihead">${esc(headTxt(l))}</li>`;const s=lineFor(l,f);return `<li><label><input type="checkbox" id="ing${i}"><span>${s.q?`<span class="q">${esc(s.q)}</span>`:""}${s.alt?` <span class="alt">(${esc(s.alt)})</span>`:""}${esc(s.rest)}</span></label></li>`}).join("")}</ul>`:'<div class="src">No ingredients yet. Tap Edit to add them.</div>'}
+      ${aiReady&&realIngs(r).length>=5&&!(r.ingredients||[]).some(isHead)&&!r.noSections?'<button type="button" class="linkedit" id="aSect" style="justify-self:start">Split into sections</button>':""}
       ${f!==1?`<div class="src">Scaled from ${base} serving${base===1?"":"s"}. Macros above stay per serving.</div>`:""}
     </div>
     ${breakdownPanel(r)}
@@ -1524,11 +1546,12 @@ function renderDetail(){
   };
   $("aGroc").onclick=()=>{
     const f2=servings/(r.servings||1);
-    (r.ingredients||[]).forEach(l=>{const s=lineFor(l,f2);grocery.push({id:Math.random().toString(36).slice(2,9),text:(s.q?s.q+" ":"")+(s.alt?"("+s.alt+") ":"")+s.rest.trim(),recipe:r.title,done:false})});
-    saveGrocery(); toast(`Added ${(r.ingredients||[]).length} items to your grocery list.`);
+    realIngs(r).forEach(l=>{const s=lineFor(l,f2);grocery.push({id:Math.random().toString(36).slice(2,9),text:(s.q?s.q+" ":"")+(s.alt?"("+s.alt+") ":"")+s.rest.trim(),recipe:r.title,done:false})});
+    saveGrocery(); toast(`Added ${realIngs(r).length} items to your grocery list.`);
   };
   $("aPdf").onclick=()=>printRecipe(r);
   $("aShare").onclick=()=>shareRecipe(r);
+  if($("aSect")) $("aSect").onclick=()=>splitSections(r);
   prepShareImage(r);
   $("aCap").onclick=()=>updateFromCaption(r);
   wireBreakdown(r);
@@ -1598,7 +1621,7 @@ $("eSave").onclick=()=>{
 let stepI=0, wake=null;
 async function openCook(){
   stepI=0; const r=byId(openId), f=servings/(r.servings||1);
-  $("cIngs").innerHTML=(r.ingredients||[]).map((l,i)=>{const s=lineFor(l,f);return `<li><label><input type="checkbox" id="cing${i}"><span>${s.q?`<span class="q">${esc(s.q)}</span>`:""}${s.alt?` <span class="alt">(${esc(s.alt)})</span>`:""}${esc(s.rest)}</span></label></li>`}).join("");
+  $("cIngs").innerHTML=(r.ingredients||[]).map((l,i)=>{if(isHead(l))return `<li class="ihead">${esc(headTxt(l))}</li>`;const s=lineFor(l,f);return `<li><label><input type="checkbox" id="cing${i}"><span>${s.q?`<span class="q">${esc(s.q)}</span>`:""}${s.alt?` <span class="alt">(${esc(s.alt)})</span>`:""}${esc(s.rest)}</span></label></li>`}).join("");
   $("cDrawer").hidden=true; $("cIngBtn").setAttribute("aria-expanded","false");
   renderCook(); $("cook").hidden=false;
   try{wake=await navigator.wakeLock.request("screen");$("cWake").textContent="Screen will stay on while you cook."}catch(e){$("cWake").textContent=""}
