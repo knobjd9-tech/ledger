@@ -1441,6 +1441,33 @@ async function sendToLoseIt(r){
   $("liClose").onclick=()=>{$("liDlg").hidden=true};
 }
 
+/* ---------- share / text a recipe: photo + ingredients + steps through the phone's share sheet ---------- */
+const shareImgs={};   // recipe id -> File, made ahead so sharing stays one tap (phones only allow sharing right after a tap)
+function dataUrlFile(d,name){const [h,b]=d.split(","),mime=(h.match(/data:([^;]+)/)||[])[1]||"image/jpeg",bin=atob(b),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new File([u],name,{type:mime})}
+async function prepShareImage(r){
+  if(shareImgs[r.id]!==undefined||!r.image) return;
+  const name=(r.title||"recipe").replace(/[^\w ]+/g,"").trim().replace(/\s+/g,"-").toLowerCase().slice(0,40)+".jpg";
+  if(String(r.image).startsWith("data:")){shareImgs[r.id]=dataUrlFile(r.image,name);return}
+  shareImgs[r.id]=null;
+  try{const res=await fetch(r.image,{referrerPolicy:"no-referrer"}); if(!res.ok) return; const bl=await res.blob(); if(/^image\//.test(bl.type)) shareImgs[r.id]=new File([bl],name,{type:bl.type})}catch(e){}   // some sites block this: share without the photo
+}
+function shareText(r){
+  const meta=[r.servings?r.servings+" serving"+(r.servings===1?"":"s"):"",r.time?fmtTime(r.time):""].filter(Boolean).join(" · ");
+  const ings=(r.ingredients||[]).map(l=>{const x=lineFor(l,1);return "• "+((x.q?x.q+" ":"")+(x.alt?"("+x.alt+") ":"")+x.rest).replace(/\s+/g," ").trim()});
+  const steps=(r.steps||[]).map((t,i)=>(i+1)+". "+stepFor(t));
+  const link=r.video&&isVideo(r.video)?r.video:(r.url||"");
+  return [r.title||"Recipe",meta,"","INGREDIENTS",...ings,...(steps.length?["","STEPS",...steps]:[]),...(link?["",(r.video?"Video: ":"Recipe: ")+link]:[])].filter((x,i,a)=>!(x===""&&a[i-1]==="")).join("\n").replace(/^\n+/,"");
+}
+async function shareRecipe(r){
+  const text=shareText(r), file=shareImgs[r.id];
+  const withPhoto=file&&navigator.canShare&&navigator.canShare({files:[file]});
+  if(navigator.share){
+    try{await navigator.share(withPhoto?{files:[file],text}:{text,title:r.title}); return}
+    catch(e){ if(e&&e.name==="AbortError") return; if(withPhoto){try{await navigator.share({text,title:r.title});return}catch(e2){if(e2&&e2.name==="AbortError")return}} }
+  }
+  try{await navigator.clipboard.writeText(text);toast("Recipe copied. Paste it into a text or email.")}catch(e){toast("Sharing isn't available here.")}
+}
+
 /* ---------- detail ---------- */
 const byId=id=>recipes.find(r=>r.id===id);
 function openDetail(id){openId=id;const r=byId(id);if(!r)return;servings=r.servings||1;renderDetail();$("detail").hidden=false;$("detail").scrollTop=0}
@@ -1466,6 +1493,7 @@ function renderDetail(){
       <button type="button" class="btn" id="aCooked">I cooked this</button>
       <button type="button" class="btn" id="aGroc">Add to grocery list</button>
       <button type="button" class="btn primary" id="aLoseIt">Send to Lose It</button>
+      <button type="button" class="btn" id="aShare">Share / text</button>
       <button type="button" class="btn" id="aPdf">Save as PDF</button>
       <button type="button" class="btn wide" id="aCap">Update from a caption or text</button>
     </div>
@@ -1494,6 +1522,8 @@ function renderDetail(){
     saveGrocery(); toast(`Added ${(r.ingredients||[]).length} items to your grocery list.`);
   };
   $("aPdf").onclick=()=>printRecipe(r);
+  $("aShare").onclick=()=>shareRecipe(r);
+  prepShareImage(r);
   $("aCap").onclick=()=>updateFromCaption(r);
   wireBreakdown(r);
   wireParts();
