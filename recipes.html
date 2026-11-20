@@ -155,6 +155,34 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 .cooknav .btn{padding:16px;font-size:17px}
 .drawer{background:var(--surface);border-top:1px solid var(--line);max-height:45vh;overflow-y:auto;padding:12px 20px}
 
+/* weekly plan */
+.weekbar{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:8px}
+.weekbar .iconbtn{font-size:22px;line-height:1;padding:6px 0}
+.pdays{list-style:none;margin:0;padding:0;display:grid}
+.pday{display:grid;grid-template-columns:52px minmax(0,1fr);gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.pday:first-child{border-top:0}
+.pday .dn{display:grid;justify-items:center;line-height:1.1;color:var(--muted)}
+.pday .dn b{font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+.pday .dn span{font-family:var(--display);font-weight:800;font-size:20px;color:var(--ink)}
+.pday.today .dn b,.pday.today .dn span{color:var(--accent)}
+.pday.past .dn{opacity:.5}
+.pmeal{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--raised);border:1px solid var(--line);border-radius:10px;padding:6px;min-width:0}
+.pmeal .pimg{width:56px;height:56px;border-radius:7px;object-fit:cover;background:var(--surface);display:grid;place-items:center;overflow:hidden}
+.pmeal .pimg img{width:100%;height:100%;object-fit:cover}
+.pmeal .pt{display:grid;gap:1px;min-width:0;text-align:left;background:none;border:0;padding:0;color:inherit}
+.pmeal .pt b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pmeal .ps{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);white-space:nowrap}
+.pmeal .ps .n{color:var(--ink);font-weight:700;min-width:14px;text-align:center}
+.pmeal .ps button{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700;line-height:1;padding:0}
+.pmeal .px{background:none;border:0;color:var(--muted);font-size:20px;padding:4px 8px}
+.padd{justify-self:start;background:none;border:1px dashed var(--line);border-radius:10px;padding:14px 16px;color:var(--accent);font-weight:600;width:100%;text-align:left}
+.pickrow{display:grid;gap:8px}
+#haveList .gitem input:checked~span{color:inherit;text-decoration:none}
+#haveList .gitem input:checked~.gq{color:var(--muted)}
+#haveList .gitem input:not(:checked)~span{color:var(--muted);text-decoration:line-through}
+.pickrow .card{grid-template-columns:64px minmax(0,1fr)}
+.pickrow .tw,.pickrow .thumb{width:64px!important;height:64px!important}
+
 /* grocery */
 .glist{display:grid;gap:14px}
 .ggroup h3{font-size:15px;margin-bottom:4px}
@@ -266,6 +294,7 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
       <button type="button" class="pill" id="viewBtn" aria-haspopup="true" aria-expanded="false" aria-controls="viewMenu"><span id="viewName">Recipes</span><svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1.5l5 5 5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div class="menu" id="viewMenu" hidden>
         <button type="button" data-v="list"><b>Recipes</b><span>Find, cook and add recipes</span></button>
+        <button type="button" data-v="plan"><b>This week</b><span id="menuPlan">Plan dinners for the week</span></button>
         <button type="button" data-v="grocery"><b>Grocery list</b><span id="menuGroc">Ingredients for the store</span></button>
         <hr>
         <button type="button" id="aiMenu"><b>AI reading</b><span id="aiMenuSub">Set up your free Gemini key</span></button>
@@ -313,6 +342,15 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
   </main>
 
   <!-- GROCERY -->
+  <main id="vPlan" class="view" hidden style="display:grid;gap:14px">
+    <div class="panel">
+      <div class="weekbar"><button type="button" class="iconbtn" id="pPrev" aria-label="Previous week">‹</button><div style="text-align:center"><b id="pLabel">This week</b><div class="src" id="pRange"></div></div><button type="button" class="iconbtn" id="pNext" aria-label="Next week">›</button></div>
+      <ul class="pdays" id="pDays"></ul>
+    </div>
+    <button type="button" class="btn primary" id="pBuild" style="padding:13px">Build grocery list</button>
+    <div class="src" id="pNote" style="text-align:center;margin-top:-6px"></div>
+  </main>
+
   <main id="vGrocery" class="view" hidden style="display:grid;gap:14px">
     <form class="panel" id="gAddForm" novalidate>
       <label for="gAdd" class="lbl">Add an item</label>
@@ -391,6 +429,22 @@ textarea.field{resize:vertical;min-height:120px;line-height:1.5}
 </section>
 
 <!-- AI SETUP -->
+<section class="sheet" id="pickSheet" hidden aria-label="Pick a dinner">
+  <div class="sheetbar"><button type="button" class="iconbtn" id="pickBack">&larr; Back</button><b id="pickHead">Pick a dinner</b><span style="width:60px"></span></div>
+  <div class="sheetbody">
+    <input id="pickSearch" class="field" type="search" placeholder="Search your recipes" autocomplete="off" aria-label="Search recipes">
+    <div class="pickrow" id="pickList"></div>
+  </div>
+</section>
+<section class="sheet" id="haveSheet" hidden aria-label="What you need">
+  <div class="sheetbar"><button type="button" class="iconbtn" id="haveBack">Cancel</button><b>What do you need?</b><span style="width:60px"></span></div>
+  <div class="sheetbody">
+    <div class="notice">Untick anything you already have. Spices and oils start unticked since you usually have them.</div>
+    <div class="panel"><div class="glist" id="haveList"></div></div>
+    <button type="button" class="btn primary" id="haveAdd" style="padding:13px">Add to grocery list</button>
+  </div>
+</section>
+
 <section class="sheet" id="ghSheet" hidden aria-label="Send to Lose It">
   <div class="sheetbar"><button type="button" class="iconbtn" id="ghBack">&larr; Recipes</button><b>Send to Lose It</b><span style="width:60px"></span></div>
   <div class="sheetbody">
@@ -517,9 +571,10 @@ function lsGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 
 let aiReady=lsGet(LS+".ai")===true, ghReady=lsGet(LS+".gh")===true;
+let plan={}, pWeek=0;
 let recipes=[], grocery=[], filterTag="All", query="", openId=null, servings=null;
-const cached=lsGet(LS); if(cached){recipes=cached.recipes||[];grocery=cached.grocery||[]}
-const cache=()=>lsSet(LS,{recipes,grocery});
+const cached=lsGet(LS); if(cached){recipes=cached.recipes||[];grocery=cached.grocery||[];plan=cached.plan||{}}
+const cache=()=>lsSet(LS,{recipes,grocery,plan});
 
 let toastT;
 function toast(msg,action,fn){const t=$("toast");t.textContent=msg;
@@ -562,7 +617,7 @@ async function load(){
     recipes=j.recipes||[];
     queue.forEach(q=>{if(q.action==="saveRecipe"){const i=recipes.findIndex(r=>r.id===q.recipe.id);if(i>=0)recipes[i]=q.recipe;else recipes.unshift(q.recipe)}
       if(q.action==="deleteRecipe")recipes=recipes.filter(r=>r.id!==q.id);
-      if(q.action==="saveGrocery")j.grocery=q.items}); grocery=j.grocery||[]; aiReady=!!j.aiReady; lsSet(LS+".ai",aiReady); if("ghReady" in j){ghReady=!!j.ghReady;lsSet(LS+".gh",ghReady)} cache(); renderAll(); renderAi(); renderGh();
+      if(q.action==="saveGrocery")j.grocery=q.items; if(q.action==="savePlan")j.plan=q.plan}); grocery=j.grocery||[]; if(j.plan)plan=j.plan; aiReady=!!j.aiReady; lsSet(LS+".ai",aiReady); if("ghReady" in j){ghReady=!!j.ghReady;lsSet(LS+".gh",ghReady)} cache(); renderAll(); renderAi(); renderGh();
     $("status").textContent="Synced "+new Date().toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
   }catch(e){$("status").textContent=String(e.message).includes("bad_request")?"Update your Apps Script to turn on recipes.":"Offline. Showing saved copy."}
 }
@@ -1696,17 +1751,96 @@ function parseGroc(line,f){
   return {name,cat,qty:n!=null?{n:n*(f||1),unit}:null};
 }
 const gKey=name=>name.toLowerCase().replace(/[^a-z ]/g,"").replace(/(es|s)\b/g,"").replace(/\s+/g," ").trim();
-const gQty=q=>{if(!q)return "";const n=q.n,u=q.unit,v=fmt(Math.round(n*100)/100);return u?`${v} ${n>1&&G_PLURAL[u]?G_PLURAL[u]:u}`:v};
-function addToGrocery(lines,f,title){
-  const out={added:0,merged:0,skipped:[]};
-  lines.flatMap(l=>[].concat(parseGroc(l,f)||[])).forEach(g=>{ if(g.skip){out.skipped.includes(g.skip)||out.skipped.push(g.skip);return}
-    const k=gKey(g.name), ex=grocery.find(x=>!x.done&&x.name&&gKey(x.name)===k);
-    if(ex){ if(title&&!(ex.recipes||[]).includes(title)) ex.recipes=(ex.recipes||[]).concat([title]);
-      if(g.qty){ex.qtys=ex.qtys||[]; const same=ex.qtys.find(q=>q.unit===g.qty.unit); if(same) same.n+=g.qty.n; else ex.qtys.push(g.qty)}
-      out.merged++; return}
-    grocery.push({id:Math.random().toString(36).slice(2,9),name:g.name,cat:g.cat,qtys:g.qty?[g.qty]:[],recipes:title?[title]:[],done:false}); out.added++});
-  return out;
+const gQty=q=>{if(!q)return "";const u=q.unit, n=(!u||/^(clove|can|package|head|bunch|slice|stick|jar|bottle|bag|sprig)$/.test(u))&&q.n>=1?Math.round(q.n):q.n, v=fmt(Math.round(n*100)/100);   // whole lemons, eggs, cans
+ return u?`${v} ${n>1&&G_PLURAL[u]?G_PLURAL[u]:u}`:v};
+// parse several recipes' ingredients into one combined list (nothing is added yet)
+function gPreview(entries){
+  const items=[], skipped=[];
+  entries.forEach(({lines,f,title})=>lines.flatMap(l=>[].concat(parseGroc(l,f)||[])).forEach(g=>{
+    if(g.skip){skipped.includes(g.skip)||skipped.push(g.skip);return}
+    const k=gKey(g.name), ex=items.find(x=>gKey(x.name)===k);
+    if(ex){ if(title&&!ex.recipes.includes(title)) ex.recipes.push(title);
+      if(g.qty){const same=ex.qtys.find(q=>q.unit===g.qty.unit); if(same) same.n+=g.qty.n; else ex.qtys.push(Object.assign({},g.qty))} return}
+    items.push({name:g.name,cat:g.cat,qtys:g.qty?[Object.assign({},g.qty)]:[],recipes:title?[title]:[]})}));
+  return {items,skipped};
 }
+// add preview items to the grocery list, combining with anything already on it
+function gAdd(items){
+  let added=0, merged=0;
+  items.forEach(it=>{const ex=grocery.find(x=>!x.done&&x.name&&gKey(x.name)===gKey(it.name));
+    if(ex){it.recipes.forEach(t=>{if(!(ex.recipes||[]).includes(t))ex.recipes=(ex.recipes||[]).concat([t])});
+      it.qtys.forEach(q=>{ex.qtys=ex.qtys||[];const same=ex.qtys.find(x=>x.unit===q.unit);if(same)same.n+=q.n;else ex.qtys.push(q)}); merged++; return}
+    grocery.push({id:Math.random().toString(36).slice(2,9),name:it.name,cat:it.cat,qtys:it.qtys,recipes:it.recipes,done:false}); added++});
+  return {added,merged};
+}
+function addToGrocery(lines,f,title){const p=gPreview([{lines,f,title}]), r=gAdd(p.items); return {added:r.added,merged:r.merged,skipped:p.skipped}}
+
+/* ---------- This week: plan dinners, then build one grocery list ---------- */
+const DAYN=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const dkey=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+function weekDays(off){const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()-((d.getDay()+6)%7)+off*7);   // Monday
+  return Array.from({length:7},(_,i)=>{const x=new Date(d);x.setDate(d.getDate()+i);return x})}
+let pickDate=null;
+function savePlan(){cache();renderPlan();clearTimeout(pTimer);pTimer=setTimeout(()=>enqueue({action:"savePlan",plan}),700)}
+let pTimer;
+function renderPlan(){
+  const days=weekDays(pWeek), t=todayKey(), fmtD=d=>d.toLocaleDateString(undefined,{month:"short",day:"numeric"});
+  $("pLabel").textContent=pWeek===0?"This week":pWeek===1?"Next week":pWeek===-1?"Last week":`Week of ${fmtD(days[0])}`;
+  $("pRange").textContent=`${fmtD(days[0])} – ${fmtD(days[6])}`;
+  const planned=days.filter(d=>plan[dkey(d)]&&byId(plan[dkey(d)].id));
+  $("pDays").innerHTML=days.map((d,i)=>{const k=dkey(d), e=plan[k], r=e&&byId(e.id);
+    return `<li class="pday${k===t?" today":""}${k<t?" past":""}"><div class="dn"><b>${DAYN[i]}</b><span>${d.getDate()}</span></div>${r?
+      `<div class="pmeal"><span class="pimg">${r.image?`<img src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:""}</span>
+        <div style="display:grid;gap:4px;min-width:0"><button type="button" class="pt" data-open="${esc(r.id)}"><b>${esc(r.title)}</b>${(r.nutrition||{}).calories!=null?`<span class="src" style="font-size:12px">${r.nutrition.calories} cal${r.nutrition.protein!=null?` · ${r.nutrition.protein}g protein`:""}</span>`:""}</button>
+        <span class="ps"><button type="button" data-sv="${k}" data-d="-1" aria-label="Fewer servings">−</button><span class="n">${e.servings}</span><button type="button" data-sv="${k}" data-d="1" aria-label="More servings">+</button>serving${e.servings===1?"":"s"}</span></div>
+        <button type="button" class="px" data-rm="${k}" aria-label="Remove ${esc(r.title)}">×</button></div>`
+      :`<button type="button" class="padd" data-pick="${k}">+ Add dinner</button>`}</li>`}).join("");
+  $("pBuild").disabled=!planned.length;
+  $("pBuild").textContent=planned.length?`Build grocery list (${planned.length} dinner${planned.length===1?"":"s"})`:"Build grocery list";
+  const wk=dkey(days[0]), added=(plan._added||{})[wk];
+  $("pNote").textContent=added?`Added to your grocery list ${new Date(added).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}. Build again after changing the plan.`:"";
+  const tw=weekDays(0).filter(d=>plan[dkey(d)]&&byId(plan[dkey(d)].id)).length;
+  $("menuPlan").textContent=tw?`${tw} dinner${tw===1?"":"s"} planned this week`:"Plan dinners for the week";
+}
+$("pPrev").onclick=()=>{pWeek--;renderPlan()};
+$("pNext").onclick=()=>{pWeek++;renderPlan()};
+$("pDays").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.pick){openPicker(b.dataset.pick);return}
+  if(b.dataset.rm){delete plan[b.dataset.rm];savePlan();return}
+  if(b.dataset.sv){const x=plan[b.dataset.sv];x.servings=Math.max(1,x.servings+Number(b.dataset.d));savePlan();return}
+  if(b.dataset.open){openDetail(b.dataset.open)}});
+function openPicker(k){
+  pickDate=k; const d=new Date(k+"T12:00");
+  $("pickHead").textContent=d.toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"});
+  $("pickSearch").value=""; renderPicker(); $("pickSheet").hidden=false; $("pickSheet").scrollTop=0;
+}
+function renderPicker(){
+  const q=$("pickSearch").value.trim().toLowerCase();
+  const list=recipes.filter(r=>!q||(r.title+" "+(r.ingredients||[]).join(" ")).toLowerCase().includes(q)).sort((a,b)=>(b.fav?1:0)-(a.fav?1:0)||(b.added||"").localeCompare(a.added||""));
+  $("pickList").innerHTML=list.length?list.map(r=>`<button type="button" class="card" data-id="${esc(r.id)}"><span class="tw">${thumb(r,"thumb")}</span><div class="cbody"><div class="ctitle">${r.fav?'<span class="star">★</span> ':""}${esc(r.title)}</div><div class="meta">${cardMeta(r)}</div></div></button>`).join(""):'<div class="src">No recipes match.</div>';
+}
+$("pickSearch").addEventListener("input",renderPicker);
+$("pickBack").onclick=()=>{$("pickSheet").hidden=true};
+$("pickList").addEventListener("click",e=>{const c=e.target.closest(".card");if(!c)return;const r=byId(c.dataset.id);
+  plan[pickDate]={id:r.id,servings:r.servings||2}; $("pickSheet").hidden=true; savePlan(); toast(`${r.title} planned.`)});
+let haveItems=[];
+$("pBuild").onclick=()=>{
+  const days=weekDays(pWeek), entries=days.map(d=>plan[dkey(d)]).filter(e=>e&&byId(e.id)).map(e=>{const r=byId(e.id);return {lines:realIngs(r),f:e.servings/(r.servings||e.servings||1),title:r.title}});
+  const p=gPreview(entries); haveItems=p.items.map(it=>Object.assign(it,{need:it.cat!=="Spices & oils"}));
+  const groups={}; haveItems.forEach((it,i)=>{const c=G_ORDER.includes(it.cat)?it.cat:"Other";(groups[c]=groups[c]||[]).push(i)});
+  $("haveList").innerHTML=G_ORDER.filter(c=>groups[c]).map(c=>`<div class="ggroup"><h3>${esc(c)}</h3>${groups[c].map(i=>{const it=haveItems[i];return `<label class="gitem"><input type="checkbox" data-hi="${i}" ${it.need?"checked":""}><span class="gname">${esc(it.name)}<small>${esc(it.recipes.join(", "))}</small></span><span class="gq">${esc(it.qtys.map(gQty).join(" + "))}</span></label>`}).join("")}</div>`).join("")+(p.skipped.length?`<div class="src">Left off: ${esc(p.skipped.join(", "))}.</div>`:"");
+  updHave(); $("haveSheet").hidden=false; $("haveSheet").scrollTop=0;
+};
+function updHave(){const n=haveItems.filter(x=>x.need).length;$("haveAdd").textContent=`Add ${n} item${n===1?"":"s"} to grocery list`;$("haveAdd").disabled=!n}
+$("haveList").addEventListener("change",e=>{const i=e.target.dataset.hi;if(i!=null){haveItems[i].need=e.target.checked;updHave()}});
+$("haveBack").onclick=()=>{$("haveSheet").hidden=true};
+$("haveAdd").onclick=()=>{
+  const r=gAdd(haveItems.filter(x=>x.need).map(({need,...x})=>x));
+  plan._added=Object.assign({},plan._added,{[dkey(weekDays(pWeek)[0])]:new Date().toISOString()});
+  saveGrocery(); savePlan(); $("haveSheet").hidden=true; setView("grocery");
+  toast(`Added ${r.added} item${r.added===1?"":"s"}${r.merged?`, combined ${r.merged} with what was there`:""}.`);
+};
+
 // lists saved before this change: tidy them into the new format once
 function migrateGrocery(){let ch=false;
   grocery=grocery.flatMap(x=>{if(x.name)return [x]; ch=true;
@@ -1740,9 +1874,9 @@ $("gClearNo").onclick=()=>{$("gConfirm").hidden=true};
 $("gClearYes").onclick=()=>{grocery=[];$("gConfirm").hidden=true;saveGrocery()};
 
 /* ---------- screens ---------- */
-const VIEWS={list:"Recipes",grocery:"Grocery list"};
+const VIEWS={list:"Recipes",plan:"This week",grocery:"Grocery list"};
 function setView(v){
-  $("vList").hidden=v!=="list"; $("vGrocery").hidden=v!=="grocery";
+  $("vList").hidden=v!=="list"; $("vGrocery").hidden=v!=="grocery"; $("vPlan").hidden=v!=="plan"; if(v==="plan")renderPlan();
   $("viewName").textContent=VIEWS[v];
   document.querySelectorAll("#viewMenu [data-v]").forEach(b=>b.setAttribute("aria-current",b.dataset.v===v));
   closeMenu(); window.scrollTo(0,0);
@@ -1755,7 +1889,7 @@ document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;closeMenu();
   if(!$("cook").hidden)closeCook();else if(!$("edit").hidden)$("eCancel").click();else if(!$("detail").hidden)$("dBack").click()});
 document.addEventListener("visibilitychange",async()=>{if(document.visibilityState==="visible"){load();if(!$("cook").hidden&&!wake){try{wake=await navigator.wakeLock.request("screen")}catch(e){}}}});
 
-function renderAll(){renderList();renderGrocery();if(openId&&!$("detail").hidden)renderDetail()}
+function renderAll(){renderList();renderGrocery();renderPlan();if(openId&&!$("detail").hidden)renderDetail()}
 setView("list"); renderAll(); load(); if(queue.length) flush();
 </script>
 </body>
